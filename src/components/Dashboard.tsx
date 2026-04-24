@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Users, ShoppingCart, Heart, TrendingUp, DollarSign, ThermometerSun } from 'lucide-react';
+import { Users, ShoppingCart, Heart, TrendingUp, DollarSign, ThermometerSun, Tag } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { getDashboardStats, revenueTimeSeries, purchaseData, temperatureFeedbacks } from '../data/mockData';
+import { getDashboardStats, revenueTimeSeries, purchaseData, temperatureFeedbacks, getRegion, STATUS_LABEL, FEEDBACK_LABEL, coupons } from '../data/mockData';
 
 const PERIOD_LABELS = ['일별','주별','월별','연별'] as const;
 type Period = typeof PERIOD_LABELS[number];
@@ -21,30 +21,30 @@ export function Dashboard() {
   const revChange   = prevRevenue > 0 ? (((curRevenue - prevRevenue) / prevRevenue) * 100).toFixed(1) : '0';
 
   // 지역별 피드백
-  const cities = ['전체', ...Array.from(new Set(temperatureFeedbacks.map(f => f.location.split(' ')[0])))];
+  const cities = ['전체', ...Array.from(new Set(temperatureFeedbacks.map(f => getRegion(f.regionId)?.city ?? '기타')))];
   const filteredFeedbacks = selectedCity === '전체'
     ? temperatureFeedbacks
-    : temperatureFeedbacks.filter(f => f.location.startsWith(selectedCity));
+    : temperatureFeedbacks.filter(f => getRegion(f.regionId)?.city === selectedCity);
 
   const feedbackData = [
-    { name: '덥다',    value: filteredFeedbacks.filter(f => f.feedback === '덥다').length,    color: '#ef4444' },
-    { name: '춥다',    value: filteredFeedbacks.filter(f => f.feedback === '춥다').length,    color: '#3b82f6' },
-    { name: '적당했다', value: filteredFeedbacks.filter(f => f.feedback === '적당했다').length, color: '#10b981' },
+    { name: FEEDBACK_LABEL['HOT'],     value: filteredFeedbacks.filter(f => f.feedback === 'HOT').length,     color: '#ef4444' },
+    { name: FEEDBACK_LABEL['COLD'],    value: filteredFeedbacks.filter(f => f.feedback === 'COLD').length,    color: '#3b82f6' },
+    { name: FEEDBACK_LABEL['PERFECT'], value: filteredFeedbacks.filter(f => f.feedback === 'PERFECT').length, color: '#10b981' },
   ];
 
   const purchaseStatusData = [
-    { name: '구매완료', value: purchaseData.filter(p => p.status === '구매완료').length, color: '#10b981' },
-    { name: '찜',      value: purchaseData.filter(p => p.status === '찜').length,      color: '#f59e0b' },
-    { name: '장바구니', value: purchaseData.filter(p => p.status === '장바구니').length, color: '#3b82f6' },
-    { name: '조회만함', value: purchaseData.filter(p => p.status === '조회만함').length, color: '#6b7280' },
+    { name: STATUS_LABEL['PURCHASED'], value: purchaseData.filter(p => p.status === 'PURCHASED').length, color:'#10b981' },
+    { name: STATUS_LABEL['WISHLIST'],  value: purchaseData.filter(p => p.status === 'WISHLIST').length,  color:'#f59e0b' },
+    { name: STATUS_LABEL['CART'],      value: purchaseData.filter(p => p.status === 'CART').length,      color:'#3b82f6' },
+    { name: STATUS_LABEL['VIEW_ONLY'], value: purchaseData.filter(p => p.status === 'VIEW_ONLY').length, color:'#6b7280' },
   ];
 
-
   const statCards = [
-    { name: '전체 고객',  value: `${stats.totalCustomers}명`,  icon: Users,          color: 'bg-blue-500' },
-    { name: '구매 완료',  value: `${stats.totalPurchases}건`,  icon: ShoppingCart,   color: 'bg-purple-500' },
-    { name: '찜 목록',    value: `${stats.totalWishlist}건`,   icon: Heart,          color: 'bg-pink-500' },
-    { name: '온도 피드백', value: `${stats.totalFeedbacks}건`, icon: ThermometerSun, color: 'bg-green-500' },
+    { name: '전체 고객',   value: `${stats.totalCustomers}명`,  icon: Users,          color: 'bg-blue-500' },
+    { name: '구매 완료',   value: `${stats.totalPurchases}건`,  icon: ShoppingCart,   color: 'bg-purple-500' },
+    { name: '찜 목록',     value: `${stats.totalWishlist}건`,   icon: Heart,          color: 'bg-pink-500' },
+    { name: '온도 피드백', value: `${stats.totalFeedbacks}건`,  icon: ThermometerSun, color: 'bg-green-500' },
+    { name: '발급 쿠폰',   value: `${coupons.reduce((s,c)=>s+c.issuedCount,0)}건`, icon: Tag, color: 'bg-orange-500' },
   ];
 
   return (
@@ -54,8 +54,7 @@ export function Dashboard() {
         <p className="text-gray-500 text-sm">WeatherFit 전체 현황</p>
       </div>
 
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {statCards.map(s => {
           const Icon = s.icon;
           return (
@@ -70,7 +69,6 @@ export function Dashboard() {
         })}
       </div>
 
-      {/* 매출 추이 */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -104,7 +102,6 @@ export function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      {/* 피드백 분포 + 구매 상태 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
@@ -140,7 +137,6 @@ export function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
-
     </div>
   );
 }

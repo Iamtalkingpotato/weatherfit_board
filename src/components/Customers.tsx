@@ -1,26 +1,31 @@
 import { useState } from 'react';
 import { Search, User, Mail, MapPin, Calendar, Award, Phone, ShoppingBag, Heart, ShoppingCart } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { customers, purchaseData, temperatureFeedbacks, wardrobeItems, getCustomerPreferences } from '../data/mockData';
+import {
+  customers, purchaseData, temperatureFeedbacks, wardrobeItems, getCustomerPreferences,
+  getRegion, getProduct, getColor,
+  GENDER_LABEL, MEMBERSHIP_LABEL, FEEDBACK_LABEL, WEATHER_LABEL, STATUS_LABEL, STYLE_LABEL, CATEGORY_LABEL,
+  JOIN_CHANNEL_LABEL, JOIN_TYPE_LABEL,
+} from '../data/mockData';
 
 const membershipColors: Record<string, string> = {
-  'VIP':  'bg-purple-100 text-purple-800 border-purple-200',
-  '골드': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  '실버': 'bg-gray-100 text-gray-700 border-gray-200',
-  '일반': 'bg-blue-100 text-blue-800 border-blue-200',
+  'VIP':    'bg-purple-100 text-purple-800 border-purple-200',
+  'GOLD':   'bg-yellow-100 text-yellow-800 border-yellow-200',
+  'SILVER': 'bg-gray-100 text-gray-700 border-gray-200',
+  'NORMAL': 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
 const feedbackColors: Record<string, string> = {
-  '덥다': 'bg-red-100 text-red-800',
-  '춥다': 'bg-blue-100 text-blue-800',
-  '적당했다': 'bg-green-100 text-green-800',
+  'HOT':     'bg-red-100 text-red-800',
+  'COLD':    'bg-blue-100 text-blue-800',
+  'PERFECT': 'bg-green-100 text-green-800',
 };
 
 const statusColors: Record<string, string> = {
-  '구매완료': 'bg-green-100 text-green-800',
-  '찜': 'bg-pink-100 text-pink-800',
-  '장바구니': 'bg-blue-100 text-blue-800',
-  '조회만함': 'bg-gray-100 text-gray-700',
+  'PURCHASED': 'bg-green-100 text-green-800',
+  'WISHLIST':  'bg-pink-100 text-pink-800',
+  'CART':      'bg-blue-100 text-blue-800',
+  'VIEW_ONLY': 'bg-gray-100 text-gray-700',
 };
 
 export function Customers() {
@@ -30,24 +35,24 @@ export function Customers() {
   const [tab, setTab] = useState<'기본'|'옷장'|'선호'|'피드백'|'구매'|'찜'|'장바구니'>('기본');
 
   const filtered = customers.filter(c => {
-    const matchSearch = c.name.includes(search) || c.email.includes(search) || c.location.includes(search);
-    const matchGender = filterGender === '전체' || c.gender === filterGender;
+    const region = getRegion(c.regionId);
+    const matchSearch = c.name.includes(search) || c.email.includes(search) || (region?.fullName ?? '').includes(search);
+    const matchGender = filterGender === '전체' || GENDER_LABEL[c.gender] === filterGender;
     return matchSearch && matchGender;
   });
 
   const selected = selectedId ? customers.find(c => c.id === selectedId) : null;
-  const feedbacks  = selectedId ? temperatureFeedbacks.filter(f => f.customerId === selectedId) : [];
+  const feedbacks    = selectedId ? temperatureFeedbacks.filter(f => f.customerId === selectedId) : [];
   const allPurchases = selectedId ? purchaseData.filter(p => p.customerId === selectedId) : [];
-  const purchases  = allPurchases.filter(p => p.status === '구매완료');
-  const wishlist   = allPurchases.filter(p => p.status === '찜');
-  const cart       = allPurchases.filter(p => p.status === '장바구니');
-  const wardrobe   = selectedId ? wardrobeItems.filter(w => w.customerId === selectedId) : [];
-  const prefs      = selectedId ? getCustomerPreferences(selectedId) : null;
+  const purchases    = allPurchases.filter(p => p.status === 'PURCHASED');
+  const wishlist     = allPurchases.filter(p => p.status === 'WISHLIST');
+  const cart         = allPurchases.filter(p => p.status === 'CART');
+  const wardrobe     = selectedId ? wardrobeItems.filter(w => w.customerId === selectedId) : [];
+  const prefs        = selectedId ? getCustomerPreferences(selectedId) : null;
 
-  // 피드백 추이 (날짜별)
-  const feedbackTrend = feedbacks
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map(f => ({ date: f.date.substring(5), feelsLike: f.feelsLikeTemp, actual: f.actualTemp }));
+  const feedbackTrend = [...feedbacks]
+    .sort((a, b) => a.feedbackDate.localeCompare(b.feedbackDate))
+    .map(f => ({ date: f.feedbackDate.substring(5), feelsLike: f.feelsLikeTemp, actual: f.actualTemp }));
 
   const TABS = ['기본','옷장','선호','피드백','구매','찜','장바구니'] as const;
 
@@ -58,16 +63,22 @@ export function Customers() {
         <p className="text-xs text-gray-500 mb-1.5">스타일 TOP 5</p>
         <div className="flex flex-wrap gap-1.5">
           {data.styles.length ? data.styles.map(([s, c]) => (
-            <span key={s} className="px-2 py-1 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs">{s} ({c})</span>
+            <span key={s} className="px-2 py-1 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs">{STYLE_LABEL[s] ?? s} ({c})</span>
           )) : <span className="text-xs text-gray-400">데이터 없음</span>}
         </div>
       </div>
       <div>
         <p className="text-xs text-gray-500 mb-1.5">색상 TOP 5</p>
         <div className="flex flex-wrap gap-1.5">
-          {data.colors.length ? data.colors.map(([c, n]) => (
-            <span key={c} className="px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs">{c} ({n})</span>
-          )) : <span className="text-xs text-gray-400">데이터 없음</span>}
+          {data.colors.length ? data.colors.map(([cId, n]) => {
+            const col = getColor(Number(cId));
+            return (
+              <span key={cId} className="px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs flex items-center gap-1">
+                {col?.hexCode && <span className="w-3 h-3 rounded-full border border-gray-300 inline-block" style={{ backgroundColor: col.hexCode }} />}
+                {col?.displayName ?? cId} ({n})
+              </span>
+            );
+          }) : <span className="text-xs text-gray-400">데이터 없음</span>}
         </div>
       </div>
     </div>
@@ -100,17 +111,23 @@ export function Customers() {
             </div>
           </div>
           <div className="overflow-y-auto max-h-[600px]">
-            {filtered.map(c => (
-              <button key={c.id} onClick={() => { setSelectedId(c.id); setTab('기본'); }}
-                className={`w-full text-left p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedId === c.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
-                <div className="flex justify-between items-start mb-1">
-                  <span className="font-medium text-gray-900 text-sm">{c.name}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs border ${membershipColors[c.membershipLevel]}`}>{c.membershipLevel}</span>
-                </div>
-                <p className="text-xs text-gray-500 mb-1">{c.email}</p>
-                <p className="text-xs text-gray-400">{c.location} · {c.gender} · {c.age}세</p>
-              </button>
-            ))}
+            {filtered.map(c => {
+              const region = getRegion(c.regionId);
+              return (
+                <button key={c.id} onClick={() => { setSelectedId(c.id); setTab('기본'); }}
+                  className={`w-full text-left p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedId === c.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
+                  <div className="flex justify-between items-start mb-1">
+                    <span className={`font-medium text-sm ${c.isFraud ? 'text-red-600' : 'text-gray-900'}`}>
+                      {c.name}
+                      {c.isFraud && <span className="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200">부정</span>}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-xs border ${membershipColors[c.membershipLevel]}`}>{MEMBERSHIP_LABEL[c.membershipLevel]}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-1">{c.email}</p>
+                  <p className="text-xs text-gray-400">{region?.fullName ?? '-'} · {GENDER_LABEL[c.gender]} · {c.age}세</p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -124,9 +141,9 @@ export function Customers() {
                   <button key={t} onClick={() => setTab(t)}
                     className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-colors ${tab === t ? 'border-blue-500 text-blue-600 font-medium' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                     {t}
-                    {t === '구매' && purchases.length > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1.5 rounded-full">{purchases.length}</span>}
-                    {t === '찜' && wishlist.length > 0 && <span className="ml-1 text-xs bg-pink-100 text-pink-700 px-1.5 rounded-full">{wishlist.length}</span>}
-                    {t === '장바구니' && cart.length > 0 && <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1.5 rounded-full">{cart.length}</span>}
+                    {t === '구매'    && purchases.length > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1.5 rounded-full">{purchases.length}</span>}
+                    {t === '찜'      && wishlist.length  > 0 && <span className="ml-1 text-xs bg-pink-100 text-pink-700 px-1.5 rounded-full">{wishlist.length}</span>}
+                    {t === '장바구니' && cart.length      > 0 && <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1.5 rounded-full">{cart.length}</span>}
                   </button>
                 ))}
               </div>
@@ -134,26 +151,90 @@ export function Customers() {
               <div className="p-6">
                 {/* 기본 정보 */}
                 {tab === '기본' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { icon: User,     color: 'bg-blue-100 text-blue-600',   label: '이름',   value: selected.name },
-                      { icon: Mail,     color: 'bg-green-100 text-green-600', label: '이메일', value: selected.email },
-                      { icon: Phone,    color: 'bg-purple-100 text-purple-600', label: '전화번호', value: selected.phone },
-                      { icon: MapPin,   color: 'bg-red-100 text-red-600',     label: '지역',   value: selected.location },
-                      { icon: Calendar, color: 'bg-orange-100 text-orange-600', label: '가입일', value: selected.joinDate },
-                      { icon: Award,    color: 'bg-yellow-100 text-yellow-600', label: '등급',  value: selected.membershipLevel },
-                    ].map(item => {
-                      const Icon = item.icon;
-                      return (
-                        <div key={item.label} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                          <div className={`p-2 rounded-lg ${item.color}`}><Icon size={16} /></div>
-                          <div>
-                            <p className="text-xs text-gray-500">{item.label}</p>
-                            <p className="font-medium text-gray-900 text-sm">{item.value}</p>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { icon: User,     color: 'bg-blue-100 text-blue-600',     label: '이름',    value: selected.name },
+                        { icon: Mail,     color: 'bg-green-100 text-green-600',   label: '이메일',  value: selected.email },
+                        { icon: Phone,    color: 'bg-purple-100 text-purple-600', label: '전화번호', value: selected.phone ?? '-' },
+                        { icon: MapPin,   color: 'bg-red-100 text-red-600',       label: '지역',    value: getRegion(selected.regionId)?.fullName ?? '-' },
+                        { icon: Calendar, color: 'bg-orange-100 text-orange-600', label: '가입일',  value: selected.joinDate },
+                        { icon: Award,    color: 'bg-yellow-100 text-yellow-600', label: '등급',    value: MEMBERSHIP_LABEL[selected.membershipLevel] },
+                      ].map(item => {
+                        const Icon = item.icon;
+                        return (
+                          <div key={item.label} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                            <div className={`p-2 rounded-lg ${item.color}`}><Icon size={16} /></div>
+                            <div>
+                              <p className="text-xs text-gray-500">{item.label}</p>
+                              <p className="font-medium text-gray-900 text-sm">{item.value}</p>
+                            </div>
                           </div>
+                        );
+                      })}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                        <p className="text-xs text-gray-500 mb-1">성별</p>
+                        <p className="font-medium">{GENDER_LABEL[selected.gender]}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                        <p className="text-xs text-gray-500 mb-1">활동량</p>
+                        <p className="font-medium">{selected.activityLevel === 'HIGH' ? '높음' : selected.activityLevel === 'MEDIUM' ? '보통' : '낮음'}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                        <p className="text-xs text-gray-500 mb-1">추위 민감도</p>
+                        <p className="font-medium">{selected.coldSensitivity > 0 ? `+${selected.coldSensitivity} (더위탐)` : selected.coldSensitivity < 0 ? `${selected.coldSensitivity} (추위탐)` : '보통'}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm col-span-3">
+                        <p className="text-xs text-gray-500 mb-1">선호 스타일</p>
+                        <p className="font-medium">{STYLE_LABEL[selected.preferredStyle] ?? selected.preferredStyle}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                        <p className="text-xs text-gray-500 mb-1">가입 채널</p>
+                        <p className="font-medium">{JOIN_CHANNEL_LABEL[selected.joinChannel] ?? selected.joinChannel}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                        <p className="text-xs text-gray-500 mb-1">가입 유형</p>
+                        <p className="font-medium">{JOIN_TYPE_LABEL[selected.joinType] ?? selected.joinType}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                        <p className="text-xs text-gray-500 mb-1">최근 로그인</p>
+                        <p className="font-medium">{selected.lastLoginDate}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm col-span-3">
+                        <p className="text-xs text-gray-500 mb-1">휴면 일수</p>
+                        <p className="font-medium">
+                          {selected.dormantDays}일
+                          {selected.dormantDays >= 90 && <span className="ml-1 text-yellow-600">⚠️</span>}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 동의 정보 */}
+                    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
+                      <h3 className="text-sm font-semibold text-gray-800 mb-3">동의 정보</h3>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { label: '마케팅 활용', val: selected.marketingConsent },
+                          { label: '푸시 알림',   val: selected.pushConsent },
+                          { label: '이메일',      val: selected.emailConsent },
+                          { label: 'SMS',         val: selected.smsConsent },
+                          { label: 'DM',          val: selected.dmConsent },
+                          { label: 'TM',          val: selected.tmConsent },
+                        ].map(item => (
+                          <div key={item.label} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs ${item.val ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-400 border border-gray-200'}`}>
+                            <span className={`w-2 h-2 rounded-full ${item.val ? 'bg-green-500' : 'bg-gray-300'}`} />
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                      {selected.isFraud && (
+                        <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
+                          ⚠️ 부정 사용자로 등록된 고객입니다
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -165,18 +246,25 @@ export function Customers() {
                       <div className="text-center py-10 text-gray-400">등록된 옷이 없습니다</div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
-                        {wardrobe.map(w => (
-                          <div key={w.id} className="p-3 border border-gray-200 rounded-xl bg-gray-50">
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="text-xs font-medium text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200">{w.category}</span>
-                              <span className="text-xs text-gray-400">{w.registeredDate}</span>
+                        {wardrobe.map(w => {
+                          const color = getColor(w.colorId);
+                          return (
+                            <div key={w.id} className="p-3 border border-gray-200 rounded-xl bg-gray-50">
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="text-xs font-medium text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200">{CATEGORY_LABEL[w.category] ?? w.category}</span>
+                                <span className="text-xs text-gray-400">{w.registeredDate}</span>
+                              </div>
+                              <div className="flex gap-2 flex-wrap items-center">
+                                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded">{STYLE_LABEL[w.style] ?? w.style}</span>
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded flex items-center gap-1">
+                                  {color?.hexCode && <span className="w-2.5 h-2.5 rounded-full border border-gray-300 inline-block" style={{ backgroundColor: color.hexCode }} />}
+                                  {color?.displayName ?? w.colorId}
+                                </span>
+                                <span className="px-2 py-0.5 bg-orange-50 text-orange-700 text-xs rounded">보온 {w.warmth}</span>
+                              </div>
                             </div>
-                            <div className="flex gap-2 flex-wrap">
-                              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded">{w.style}</span>
-                              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded">{w.color}</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -191,11 +279,11 @@ export function Customers() {
                     <PreferenceBlock title="겉옷 / 아우터" data={prefs.outer} />
                     <div className="bg-gray-50 rounded-xl p-4">
                       <h4 className="font-medium text-gray-800 mb-3">전체 종합</h4>
-                      <div className="mb-2">
+                      <div>
                         <p className="text-xs text-gray-500 mb-1.5">선호 카테고리</p>
                         <div className="flex flex-wrap gap-1.5">
                           {prefs.overall.categories.map(([c, n]) => (
-                            <span key={c} className="px-2 py-1 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs">{c} ({n})</span>
+                            <span key={c} className="px-2 py-1 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs">{CATEGORY_LABEL[c] ?? c} ({n})</span>
                           ))}
                         </div>
                       </div>
@@ -224,18 +312,18 @@ export function Customers() {
                           </ResponsiveContainer>
                           <div className="flex gap-4 justify-center text-xs text-gray-500 mt-2">
                             <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-500 inline-block" />실제온도</span>
-                            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block border-dashed" />체감온도</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block" />체감온도</span>
                           </div>
                         </div>
                         <div className="space-y-2">
-                          {feedbacks.sort((a,b) => b.date.localeCompare(a.date)).map(f => (
+                          {[...feedbacks].sort((a,b) => b.feedbackDate.localeCompare(a.feedbackDate)).map(f => (
                             <div key={f.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                              <div className="text-xs text-gray-400 w-16 shrink-0">{f.date.substring(5)}</div>
+                              <div className="text-xs text-gray-400 w-16 shrink-0">{f.feedbackDate.substring(5)}</div>
                               <div className="flex-1">
-                                <p className="text-xs text-gray-700">{f.actualTemp}°C / 체감 {f.feelsLikeTemp}°C · {f.weatherCondition}</p>
+                                <p className="text-xs text-gray-700">{f.actualTemp}°C / 체감 {f.feelsLikeTemp}°C · {WEATHER_LABEL[f.weatherCondition]}</p>
                                 <p className="text-xs text-gray-400 mt-0.5">{f.recommendedOutfit.join(', ')}</p>
                               </div>
-                              <span className={`px-2 py-0.5 rounded text-xs ${feedbackColors[f.feedback]}`}>{f.feedback}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${feedbackColors[f.feedback]}`}>{FEEDBACK_LABEL[f.feedback]}</span>
                             </div>
                           ))}
                         </div>
@@ -251,22 +339,25 @@ export function Customers() {
                     <div className="text-center py-10 text-gray-400">내역이 없습니다</div>
                   ) : (
                     <div className="space-y-3">
-                      {items.map(p => (
-                        <div key={p.id} className="flex gap-3 p-3 border border-gray-100 rounded-xl hover:bg-gray-50">
-                          <img src={p.productImage} alt={p.productName} className="w-16 h-16 object-cover rounded-lg" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <h3 className="font-medium text-gray-900 text-sm truncate">{p.productName}</h3>
-                              <span className={`ml-2 shrink-0 px-2 py-0.5 rounded text-xs ${statusColors[p.status]}`}>{p.status}</span>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-0.5">{p.category} · {p.style} · {p.color}</p>
-                            <div className="flex justify-between items-center mt-1">
-                              <span className="text-xs text-gray-400">{p.date}</span>
-                              <span className="font-semibold text-sm text-gray-900">₩{p.price.toLocaleString()}</span>
+                      {items.map(p => {
+                        const prod = getProduct(p.productId);
+                        return (
+                          <div key={p.id} className="flex gap-3 p-3 border border-gray-100 rounded-xl hover:bg-gray-50">
+                            {prod?.imageUrl && <img src={prod.imageUrl} alt={prod.name} className="w-16 h-16 object-cover rounded-lg" />}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <h3 className="font-medium text-gray-900 text-sm truncate">{prod?.name ?? p.productId}</h3>
+                                <span className={`ml-2 shrink-0 px-2 py-0.5 rounded text-xs ${statusColors[p.status]}`}>{STATUS_LABEL[p.status]}</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">{CATEGORY_LABEL[prod?.category ?? ''] ?? '-'} · {prod?.style ?? '-'}{p.size ? ` · ${p.size}` : ''}</p>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-xs text-gray-400">{p.purchaseDate}</span>
+                                <span className="font-semibold text-sm text-gray-900">₩{p.price.toLocaleString()}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })()}

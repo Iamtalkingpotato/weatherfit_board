@@ -1,36 +1,36 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { temperatureFeedbacks, customers } from '../data/mockData';
+import { temperatureFeedbacks, customers, getRegion, FEEDBACK_LABEL, WEATHER_LABEL } from '../data/mockData';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export function FeedbackAnalysis() {
-  const total = temperatureFeedbacks.length;
-  const hot    = temperatureFeedbacks.filter(f => f.feedback === '덥다').length;
-  const cold   = temperatureFeedbacks.filter(f => f.feedback === '춥다').length;
-  const perfect = temperatureFeedbacks.filter(f => f.feedback === '적당했다').length;
+  const total   = temperatureFeedbacks.length;
+  const hot     = temperatureFeedbacks.filter(f => f.feedback === 'HOT').length;
+  const cold    = temperatureFeedbacks.filter(f => f.feedback === 'COLD').length;
+  const perfect = temperatureFeedbacks.filter(f => f.feedback === 'PERFECT').length;
 
   const stats = [
-    { name:'덥다',    count: hot,    pct: ((hot/total)*100).toFixed(1),    icon: TrendingUp,   bg:'bg-red-50',   iconBg:'bg-red-500',   text:'text-red-600' },
-    { name:'춥다',    count: cold,   pct: ((cold/total)*100).toFixed(1),   icon: TrendingDown, bg:'bg-blue-50',  iconBg:'bg-blue-500',  text:'text-blue-600' },
-    { name:'적당했다', count: perfect, pct: ((perfect/total)*100).toFixed(1), icon: Minus,     bg:'bg-green-50', iconBg:'bg-green-500', text:'text-green-600' },
+    { name:'덥다',    count: hot,    pct: ((hot/total)*100).toFixed(1),     icon: TrendingUp,   bg:'bg-red-50',   iconBg:'bg-red-500',   text:'text-red-600' },
+    { name:'춥다',    count: cold,   pct: ((cold/total)*100).toFixed(1),    icon: TrendingDown, bg:'bg-blue-50',  iconBg:'bg-blue-500',  text:'text-blue-600' },
+    { name:'적당했다', count: perfect, pct: ((perfect/total)*100).toFixed(1), icon: Minus,       bg:'bg-green-50', iconBg:'bg-green-500', text:'text-green-600' },
   ];
 
   // 온도 구간별
   const tempMap: Record<string, Record<string, number>> = {};
   temperatureFeedbacks.forEach(f => {
     const range = `${Math.floor(f.actualTemp/5)*5}~${Math.floor(f.actualTemp/5)*5+5}°C`;
-    if (!tempMap[range]) tempMap[range] = { '덥다':0, '춥다':0, '적당했다':0 };
-    tempMap[range][f.feedback]++;
+    if (!tempMap[range]) tempMap[range] = { 덥다:0, 춥다:0, 적당했다:0 };
+    tempMap[range][FEEDBACK_LABEL[f.feedback]]++;
   });
   const tempData = Object.entries(tempMap)
     .map(([range, v]) => ({ range, ...v }))
-    .sort((a,b) => parseInt(a.range) - parseInt(b.range));
+    .sort((a, b) => parseInt(a.range) - parseInt(b.range));
 
   // 지역(시)별
   const cityMap: Record<string, Record<string, number>> = {};
   temperatureFeedbacks.forEach(f => {
-    const city = f.location.split(' ')[0];
-    if (!cityMap[city]) cityMap[city] = { '덥다':0, '춥다':0, '적당했다':0 };
-    cityMap[city][f.feedback]++;
+    const city = getRegion(f.regionId)?.city ?? '기타';
+    if (!cityMap[city]) cityMap[city] = { 덥다:0, 춥다:0, 적당했다:0 };
+    cityMap[city][FEEDBACK_LABEL[f.feedback]]++;
   });
   const cityData = Object.entries(cityMap).map(([city, v]) => ({ city, ...v }));
 
@@ -82,7 +82,7 @@ export function FeedbackAnalysis() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={cityData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="city" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="city" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
               <Legend />
@@ -116,25 +116,28 @@ export function FeedbackAnalysis() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-gray-600">
-                {['날짜','고객','지역','실제온도','체감온도','날씨','피드백'].map(h => (
+                {['날짜','고객','지역','실제온도','체감온도','습도','날씨','피드백'].map(h => (
                   <th key={h} className="text-left py-3 px-3 font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {temperatureFeedbacks.sort((a,b) => b.date.localeCompare(a.date)).map(f => {
-                const c = customers.find(c => c.id === f.customerId);
+              {[...temperatureFeedbacks].sort((a,b) => b.feedbackDate.localeCompare(a.feedbackDate)).map(f => {
+                const c   = customers.find(c => c.id === f.customerId);
+                const reg = getRegion(f.regionId);
+                const fbLabel = FEEDBACK_LABEL[f.feedback];
                 return (
                   <tr key={f.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2.5 px-3">{f.date}</td>
+                    <td className="py-2.5 px-3">{f.feedbackDate}</td>
                     <td className="py-2.5 px-3 font-medium">{c?.name}</td>
-                    <td className="py-2.5 px-3 text-gray-500">{f.location}</td>
+                    <td className="py-2.5 px-3 text-gray-500">{reg?.fullName ?? '-'}</td>
                     <td className="py-2.5 px-3">{f.actualTemp}°C</td>
                     <td className="py-2.5 px-3">{f.feelsLikeTemp}°C</td>
-                    <td className="py-2.5 px-3 text-gray-500">{f.weatherCondition}</td>
+                    <td className="py-2.5 px-3 text-gray-500">{f.humidity != null ? `${f.humidity}%` : '-'}</td>
+                    <td className="py-2.5 px-3 text-gray-500">{WEATHER_LABEL[f.weatherCondition]}</td>
                     <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded text-xs ${f.feedback === '적당했다' ? 'bg-green-100 text-green-800' : f.feedback === '덥다' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
-                        {f.feedback}
+                      <span className={`px-2 py-0.5 rounded text-xs ${f.feedback === 'PERFECT' ? 'bg-green-100 text-green-800' : f.feedback === 'HOT' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
+                        {fbLabel}
                       </span>
                     </td>
                   </tr>

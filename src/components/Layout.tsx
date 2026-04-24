@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router';
-import { LayoutDashboard, Users, ThermometerSun, ShoppingCart, Activity, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, ThermometerSun, ShoppingCart, Activity, Menu, X, Megaphone, Tag } from 'lucide-react';
 import { useState } from 'react';
 
 export function Layout() {
@@ -7,8 +7,10 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const navigation = [
-    { name: '대시보드',    href: '/',         icon: LayoutDashboard },
+    { name: '대시보드',    href: '/',          icon: LayoutDashboard },
     { name: '고객 관리',   href: '/customers', icon: Users },
+    { name: '캠페인',      href: '/campaign',  icon: Megaphone },
+    { name: '쿠폰',        href: '/coupon',    icon: Tag },
     { name: '온도 피드백', href: '/feedback',  icon: ThermometerSun },
     { name: '구매 분석',   href: '/purchase',  icon: ShoppingCart },
     { name: '사용자 행동', href: '/behavior',  icon: Activity },

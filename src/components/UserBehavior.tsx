@@ -1,19 +1,17 @@
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { behaviorLogs, customers } from '../data/mockData';
+import { behaviorLogs, ACTION_LABEL } from '../data/mockData';
 import { Eye, MousePointer, Heart, ShoppingCart, ShoppingBag, Clock, Activity } from 'lucide-react';
 
 export function UserBehavior() {
-  // 5가지 행동만
-  const TARGET_ACTIONS = ['view','scroll','wishlist','cart','purchase'] as const;
-  const ACTION_LABELS: Record<string, string> = { view:'조회', scroll:'스크롤', wishlist:'찜', cart:'장바구니', purchase:'구매' };
-  const ACTION_COLORS: Record<string, string> = { view:'#3b82f6', scroll:'#8b5cf6', wishlist:'#ec4899', cart:'#10b981', purchase:'#f59e0b' };
-  const ACTION_ICONS: Record<string, any> = { view: Eye, scroll: Activity, wishlist: Heart, cart: ShoppingCart, purchase: ShoppingBag };
+  const TARGET_ACTIONS = ['VIEW','SCROLL','WISHLIST','CART','PURCHASE'] as const;
+  const ACTION_COLORS: Record<string, string> = { VIEW:'#3b82f6', SCROLL:'#8b5cf6', WISHLIST:'#ec4899', CART:'#10b981', PURCHASE:'#f59e0b' };
+  const ACTION_ICONS:  Record<string, any>    = { VIEW: Eye, SCROLL: Activity, WISHLIST: Heart, CART: ShoppingCart, PURCHASE: ShoppingBag };
 
   const actionStats = TARGET_ACTIONS.map(a => ({
-    action: ACTION_LABELS[a],
+    action: ACTION_LABEL[a],
     count: behaviorLogs.filter(l => l.action === a).length,
     color: ACTION_COLORS[a],
-    icon: ACTION_ICONS[a],
+    icon:  ACTION_ICONS[a],
   }));
 
   const avgDuration = (() => {
@@ -24,7 +22,7 @@ export function UserBehavior() {
     const logs = behaviorLogs.filter(l => l.scrollDepth);
     return logs.length ? Math.round(logs.reduce((s, l) => s + (l.scrollDepth||0), 0) / logs.length) : 0;
   })();
-  const viewCount = behaviorLogs.filter(l => l.action === 'view').length;
+  const viewCount = behaviorLogs.filter(l => l.action === 'VIEW').length;
 
   // 시간대별
   const hourlyMap: Record<number, number> = {};
@@ -36,11 +34,11 @@ export function UserBehavior() {
 
   // 퍼널
   const funnelData = [
-    { stage:'상품 조회',  count: behaviorLogs.filter(l => l.action === 'view').length,     color:'#3b82f6' },
-    { stage:'스크롤/탐색', count: behaviorLogs.filter(l => l.action === 'scroll').length,   color:'#8b5cf6' },
-    { stage:'찜하기',     count: behaviorLogs.filter(l => l.action === 'wishlist').length,  color:'#ec4899' },
-    { stage:'장바구니',   count: behaviorLogs.filter(l => l.action === 'cart').length,      color:'#10b981' },
-    { stage:'구매완료',   count: behaviorLogs.filter(l => l.action === 'purchase').length,  color:'#f59e0b' },
+    { stage:'상품 조회',  count: behaviorLogs.filter(l => l.action === 'VIEW').length,     color:'#3b82f6' },
+    { stage:'스크롤/탐색', count: behaviorLogs.filter(l => l.action === 'SCROLL').length,   color:'#8b5cf6' },
+    { stage:'찜하기',     count: behaviorLogs.filter(l => l.action === 'WISHLIST').length,  color:'#ec4899' },
+    { stage:'장바구니',   count: behaviorLogs.filter(l => l.action === 'CART').length,      color:'#10b981' },
+    { stage:'구매완료',   count: behaviorLogs.filter(l => l.action === 'PURCHASE').length,  color:'#f59e0b' },
   ];
 
   return (
@@ -50,12 +48,11 @@ export function UserBehavior() {
         <p className="text-gray-500 text-sm">고객의 웹사이트 내 행동 패턴</p>
       </div>
 
-      {/* 주요 지표 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {[
-          { label:'평균 체류시간', value:`${avgDuration}초`, icon: Clock, color:'bg-blue-500' },
-          { label:'평균 스크롤 깊이', value:`${avgScroll}%`, icon: Activity, color:'bg-purple-500' },
-          { label:'총 페이지 조회', value:`${viewCount}회`, icon: Eye, color:'bg-orange-500' },
+          { label:'평균 체류시간',    value:`${avgDuration}초`, icon: Clock,    color:'bg-blue-500' },
+          { label:'평균 스크롤 깊이', value:`${avgScroll}%`,    icon: Activity, color:'bg-purple-500' },
+          { label:'총 페이지 조회',  value:`${viewCount}회`,   icon: Eye,      color:'bg-orange-500' },
         ].map(m => {
           const Icon = m.icon;
           return (
@@ -70,7 +67,6 @@ export function UserBehavior() {
         })}
       </div>
 
-      {/* 행동 타입별 분포 + 시간대별 활동 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">행동 타입별 분포</h2>
@@ -112,7 +108,6 @@ export function UserBehavior() {
         </div>
       </div>
 
-      {/* 구매 퍼널 */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">구매 퍼널 분석</h2>
         <p className="text-sm text-gray-500 mb-5">상품 발견 → 구매까지의 전환 흐름</p>
