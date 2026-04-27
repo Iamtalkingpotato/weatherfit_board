@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { purchaseData, getTopProducts, getTopStyles, CATEGORY_LABEL, STATUS_LABEL } from '../data/mockData';
+import { purchaseData, getTopProducts, getTopStyles, CATEGORY_LABEL, STATUS_LABEL, customers, getProduct } from '../data/mockData';
 import { ShoppingBag, Heart, ShoppingCart, Eye, DollarSign, TrendingUp } from 'lucide-react';
+import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
 
 export function PurchaseAnalysis() {
+  const [detail, setDetail] = useState<DetailData | null>(null);
   const purchased = purchaseData.filter(p => p.status === 'PURCHASED');
   const wishlist  = purchaseData.filter(p => p.status === 'WISHLIST');
   const cart      = purchaseData.filter(p => p.status === 'CART');
@@ -18,16 +21,6 @@ export function PurchaseAnalysis() {
     { name: STATUS_LABEL['VIEW_ONLY'], value: viewOnly.length,  color:'#6b7280' },
   ];
 
-  const catRev: Record<string, number> = {};
-  purchased.forEach(p => {
-    // category comes via product lookup inside getTopProducts — use separate pass here
-  });
-  // use a separate tally with product lookup
-  const catRevMap: Record<string, number> = {};
-  purchased.forEach(p => {
-    const prod = (window as any).__wfProducts?.find((x: any) => x.id === p.productId);
-    // fallback: use getTopProducts data for chart
-  });
   const topProducts = getTopProducts(10);
   const topStyles   = getTopStyles(5);
 
@@ -95,8 +88,26 @@ export function PurchaseAnalysis() {
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={statusData} cx="50%" cy="50%" outerRadius={80} dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
-                {statusData.map(e => <Cell key={e.name} fill={e.color} />)}
+                label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}
+                cursor="pointer"
+                onClick={(data: any) => {
+                  const statusKey = Object.entries({ PURCHASED:'구매완료', WISHLIST:'찜', CART:'장바구니', VIEW_ONLY:'조회만함' }).find(([,v]) => v === data.name)?.[0] ?? '';
+                  const custMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
+                  const rows = purchaseData
+                    .filter(p => p.status === statusKey)
+                    .map(p => {
+                      const prod = getProduct(p.productId);
+                      return { '고객명': custMap[p.customerId] ?? '-', '상품': prod?.name ?? p.productId, '금액': `₩${p.price.toLocaleString()}`, '날짜': p.purchaseDate };
+                    });
+                  setDetail({
+                    title: `${data.name} 목록`,
+                    subtitle: `총 ${rows.length}건`,
+                    color: statusData.find(d => d.name === data.name)?.color,
+                    columns: ['고객명', '상품', '금액', '날짜'],
+                    rows,
+                  });
+                }}>
+                {statusData.map(e => <Cell key={e.name} fill={e.color} cursor="pointer" />)}
               </Pie>
               <Tooltip />
             </PieChart>
@@ -111,7 +122,26 @@ export function PurchaseAnalysis() {
               <XAxis dataKey="category" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v/10000).toFixed(0)}만`} />
               <Tooltip formatter={(v: number) => [`₩${v.toLocaleString()}`, '매출']} />
-              <Bar dataKey="revenue" fill="#10b981" radius={[4,4,0,0]} />
+              <Bar dataKey="revenue" fill="#10b981" radius={[4,4,0,0]} cursor="pointer"
+                onClick={(data: any) => {
+                  const catKey = Object.entries({ OUTER:'아우터', TOP:'상의', BOTTOM:'하의', ACCESSORY:'악세서리' }).find(([,v]) => v === data.category)?.[0] ?? '';
+                  const custMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
+                  const rows = purchaseData
+                    .filter(p => p.status === 'PURCHASED')
+                    .filter(p => getProduct(p.productId)?.category === catKey)
+                    .map(p => {
+                      const prod = getProduct(p.productId);
+                      return { '고객명': custMap[p.customerId] ?? '-', '상품': prod?.name ?? '-', '금액': `₩${p.price.toLocaleString()}`, '날짜': p.purchaseDate };
+                    });
+                  setDetail({
+                    title: `${data.category} 구매 상세`,
+                    subtitle: `총 ₩${data.revenue?.toLocaleString()}`,
+                    color: '#10b981',
+                    columns: ['고객명', '상품', '금액', '날짜'],
+                    rows,
+                  });
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -157,6 +187,7 @@ export function PurchaseAnalysis() {
           })}
         </div>
       </div>
+      <ChartDetailPanel data={detail} onClose={() => setDetail(null)} />
     </div>
   );
 }

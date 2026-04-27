@@ -699,14 +699,60 @@ export const customerCoupons: CustomerCoupon[] = [
   { id:'cc025', customerId:'c027', couponId:'CPN009', issuedAt:'2026-03-01', expiredAt:'2026-03-31', status:'EXPIRED' },
 ];
 
-// ─── Revenue time series ──────────────────────────────────────────────────
+// ─── Revenue time series (purchaseData 기반 동적 계산) ──────────────────────
 
-export const revenueTimeSeries = {
-  daily:   [{ date:'04-07', revenue:145000 },{ date:'04-08', revenue:94000 },{ date:'04-09', revenue:0 },{ date:'04-10', revenue:79000 },{ date:'04-11', revenue:248000 },{ date:'04-12', revenue:319000 },{ date:'04-13', revenue:388000 }],
-  weekly:  [{ date:'3월2주', revenue:248000 },{ date:'3월3주', revenue:375000 },{ date:'3월4주', revenue:584000 },{ date:'4월1주', revenue:409000 },{ date:'4월2주', revenue:631000 },{ date:'4월3주', revenue:388000 }],
-  monthly: [{ date:'23-11', revenue:580000 },{ date:'23-12', revenue:920000 },{ date:'24-01', revenue:1240000 },{ date:'24-02', revenue:1680000 },{ date:'24-03', revenue:1450000 },{ date:'24-04', revenue:1870000 }],
-  yearly:  [{ date:'2022', revenue:8400000 },{ date:'2023', revenue:14200000 },{ date:'2024', revenue:6240000 }],
-};
+function computeRevenueTimeSeries() {
+  const purchased = purchaseData.filter(p => p.status === 'PURCHASED');
+
+  // ── Daily: 구매가 발생한 날짜 기준 MM-DD ─────────────────────────────────
+  const dailyMap: Record<string, number> = {};
+  purchased.forEach(p => {
+    const key = p.purchaseDate.slice(5); // "YYYY-MM-DD" → "MM-DD"
+    dailyMap[key] = (dailyMap[key] ?? 0) + p.price;
+  });
+  const daily = Object.entries(dailyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, revenue]) => ({ date, revenue }));
+
+  // ── Weekly: M월N주 (날짜/7 올림)  ────────────────────────────────────────
+  const weeklyMap: Record<string, { label: string; revenue: number }> = {};
+  purchased.forEach(p => {
+    const d   = new Date(p.purchaseDate);
+    const m   = d.getMonth() + 1;
+    const w   = Math.ceil(d.getDate() / 7);
+    const sortKey = `${d.getFullYear()}-${String(m).padStart(2,'0')}-${w}`;
+    const label   = `${m}월${w}주`;
+    if (!weeklyMap[sortKey]) weeklyMap[sortKey] = { label, revenue: 0 };
+    weeklyMap[sortKey].revenue += p.price;
+  });
+  const weekly = Object.entries(weeklyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => ({ date: v.label, revenue: v.revenue }));
+
+  // ── Monthly: YY-MM ────────────────────────────────────────────────────────
+  const monthlyMap: Record<string, number> = {};
+  purchased.forEach(p => {
+    const key = p.purchaseDate.slice(0, 7); // "YYYY-MM"
+    monthlyMap[key] = (monthlyMap[key] ?? 0) + p.price;
+  });
+  const monthly = Object.entries(monthlyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, revenue]) => ({ date: k.slice(2).replace('-', '-'), revenue })); // "2024-01" → "24-01"
+
+  // ── Yearly: YYYY ─────────────────────────────────────────────────────────
+  const yearlyMap: Record<string, number> = {};
+  purchased.forEach(p => {
+    const key = p.purchaseDate.slice(0, 4);
+    yearlyMap[key] = (yearlyMap[key] ?? 0) + p.price;
+  });
+  const yearly = Object.entries(yearlyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, revenue]) => ({ date, revenue }));
+
+  return { daily, weekly, monthly, yearly };
+}
+
+export const revenueTimeSeries = computeRevenueTimeSeries();
 
 // ─── Aggregate helpers ────────────────────────────────────────────────────
 

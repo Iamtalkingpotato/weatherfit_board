@@ -317,7 +317,7 @@ function FilterBuilder({
   const [treeQuery, setTreeQuery] = useState('');
   const [extractLimit, setExtractLimit] = useState(100);
   const [noLimit, setNoLimit] = useState(false);
-  const [queryResult, setQueryResult] = useState<number | null>(null);
+  const [queryResult, setQueryResult] = useState<{ total: number; limited: number } | null>(null);
   const [elapsed, setElapsed] = useState<number | null>(null);
   const [matchedNames, setMatchedNames] = useState<string[]>([]);
 
@@ -361,7 +361,7 @@ function FilterBuilder({
     const limited = noLimit || extractLimit === 0 ? matched : matched.slice(0, extractLimit);
     const names = limited.slice(0, 8).map(cs => cs.name);
     const extra = limited.length - names.length;
-    setQueryResult(limited.length);
+    setQueryResult({ total: matched.length, limited: limited.length });
     setMatchedNames(extra > 0 ? [...names, `+${extra}명`] : names);
     setElapsed(Math.round(performance.now() - t0));
   };
@@ -505,10 +505,15 @@ function FilterBuilder({
 
           {/* result preview */}
           {queryResult !== null && (
-            <div className={`rounded-lg px-4 py-3 text-sm border ${queryResult === 0 ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-green-50 border-green-200 text-green-800'}`}>
-              <div className="flex items-center gap-2 font-semibold mb-1">
+            <div className={`rounded-lg px-4 py-3 text-sm border ${queryResult.total === 0 ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-green-50 border-green-200 text-green-800'}`}>
+              <div className="flex items-center gap-2 font-semibold mb-1 flex-wrap">
                 <Users size={14} />
-                <span>조회 결과: {queryResult.toLocaleString()}명</span>
+                <span>총 매칭: {queryResult.total.toLocaleString()}명</span>
+                {queryResult.limited < queryResult.total && (
+                  <span className="text-xs font-normal text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                    추출 제한: {queryResult.limited.toLocaleString()}명
+                  </span>
+                )}
                 <span className="text-xs font-normal opacity-60">{elapsed}ms</span>
               </div>
               {matchedNames.length > 0 && (

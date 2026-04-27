@@ -41,7 +41,7 @@ type CouponFormData = {
   maxDiscountAmount: number;
   validDays: number;
   targetCategory: string;
-  couponId: string; // connected campaign id
+  campaignId: string; // 연결 캠페인 ID
   status: 'ACTIVE' | 'INACTIVE';
 };
 
@@ -54,7 +54,7 @@ const EMPTY_FORM: CouponFormData = {
   maxDiscountAmount: 0,
   validDays: 30,
   targetCategory: '',
-  couponId: '',
+  campaignId: '',
   status: 'ACTIVE',
 };
 
@@ -88,7 +88,7 @@ function CouponForm({
           maxDiscountAmount: initial.maxDiscountAmount ?? 0,
           validDays: initial.validDays,
           targetCategory: initial.targetCategory ?? '',
-          couponId: initial.campaignId ?? '',
+          campaignId: initial.campaignId ?? '',
           status: initial.status === 'EXPIRED' ? 'INACTIVE' : initial.status,
         }
       : { ...EMPTY_FORM },
@@ -111,7 +111,7 @@ function CouponForm({
       maxDiscountAmount: form.type === 'PERCENT' && form.maxDiscountAmount > 0 ? form.maxDiscountAmount : undefined,
       validDays: form.validDays,
       targetCategory: form.targetCategory || undefined,
-      campaignId: form.couponId || undefined,
+      campaignId: form.campaignId || undefined,
       issuedCount: initial?.issuedCount ?? 0,
       usedCount: initial?.usedCount ?? 0,
       status: form.status,
@@ -249,8 +249,8 @@ function CouponForm({
         <div className="flex items-center gap-3">
           <label className="w-32 text-sm text-gray-600 shrink-0">연결 캠페인</label>
           <select
-            value={form.couponId}
-            onChange={e => set('couponId', e.target.value)}
+            value={form.campaignId}
+            onChange={e => set('campaignId', e.target.value)}
             className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 w-72"
           >
             <option value="">없음</option>

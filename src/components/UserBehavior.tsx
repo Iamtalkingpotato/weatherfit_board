@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { behaviorLogs, ACTION_LABEL } from '../data/mockData';
+import { behaviorLogs, ACTION_LABEL, customers } from '../data/mockData';
 import { Eye, MousePointer, Heart, ShoppingCart, ShoppingBag, Clock, Activity } from 'lucide-react';
+import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
 
 export function UserBehavior() {
+  const [detail, setDetail] = useState<DetailData | null>(null);
   const TARGET_ACTIONS = ['VIEW','SCROLL','WISHLIST','CART','PURCHASE'] as const;
   const ACTION_COLORS: Record<string, string> = { VIEW:'#3b82f6', SCROLL:'#8b5cf6', WISHLIST:'#ec4899', CART:'#10b981', PURCHASE:'#f59e0b' };
   const ACTION_ICONS:  Record<string, any>    = { VIEW: Eye, SCROLL: Activity, WISHLIST: Heart, CART: ShoppingCart, PURCHASE: ShoppingBag };
@@ -74,8 +77,29 @@ export function UserBehavior() {
             <PieChart>
               <Pie data={actionStats.map(a => ({ name: a.action, value: a.count, color: a.color }))}
                 cx="50%" cy="50%" outerRadius={90} dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
-                {actionStats.map(a => <Cell key={a.action} fill={a.color} />)}
+                label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}
+                cursor="pointer"
+                onClick={(data: any) => {
+                  const custMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
+                  const actionKey = Object.entries({ VIEW:'조회', SCROLL:'스크롤', WISHLIST:'찜', CART:'장바구니', PURCHASE:'구매' }).find(([,v]) => v === data.name)?.[0] ?? '';
+                  const rows = behaviorLogs
+                    .filter(l => l.action === actionKey)
+                    .slice(0, 50)
+                    .map(l => ({
+                      '고객명': custMap[l.customerId] ?? '-',
+                      '페이지': l.pageUrl,
+                      '체류시간': l.duration ? `${l.duration}초` : '-',
+                      '시각': l.timestamp.slice(11, 16),
+                    }));
+                  setDetail({
+                    title: `${data.name} 행동 로그`,
+                    subtitle: `총 ${behaviorLogs.filter(l => l.action === actionKey).length}건 (최대 50건 표시)`,
+                    color: ACTION_COLORS[actionKey],
+                    columns: ['고객명', '페이지', '체류시간', '시각'],
+                    rows,
+                  });
+                }}>
+                {actionStats.map(a => <Cell key={a.action} fill={a.color} cursor="pointer" />)}
               </Pie>
               <Tooltip />
             </PieChart>
@@ -102,7 +126,26 @@ export function UserBehavior() {
               <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={2} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip formatter={(v: number) => [v, '건수']} />
-              <Bar dataKey="count" fill="#8b5cf6" radius={[3,3,0,0]} />
+              <Bar dataKey="count" fill="#8b5cf6" radius={[3,3,0,0]} cursor="pointer"
+                onClick={(data: any) => {
+                  const hour = parseInt(data.hour);
+                  const custMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
+                  const logs = behaviorLogs.filter(l => new Date(l.timestamp).getHours() === hour);
+                  const rows = logs.map(l => ({
+                    '고객명': custMap[l.customerId] ?? '-',
+                    '행동': ACTION_LABEL[l.action] ?? l.action,
+                    '페이지': l.pageUrl,
+                    '시각': l.timestamp.slice(11, 16),
+                  }));
+                  setDetail({
+                    title: `${data.hour} 활동 로그`,
+                    subtitle: `총 ${rows.length}건`,
+                    color: '#8b5cf6',
+                    columns: ['고객명', '행동', '페이지', '시각'],
+                    rows,
+                  });
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -117,7 +160,27 @@ export function UserBehavior() {
             <XAxis type="number" tick={{ fontSize: 12 }} />
             <YAxis dataKey="stage" type="category" width={85} tick={{ fontSize: 12 }} />
             <Tooltip />
-            <Bar dataKey="count" radius={[0,4,4,0]}>
+            <Bar dataKey="count" radius={[0,4,4,0]} cursor="pointer"
+              onClick={(data: any) => {
+                const stageToAction: Record<string, string> = { '상품 조회':'VIEW', '스크롤/탐색':'SCROLL', '찜하기':'WISHLIST', '장바구니':'CART', '구매완료':'PURCHASE' };
+                const actionKey = stageToAction[data.stage] ?? '';
+                const custMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
+                const rows = behaviorLogs
+                  .filter(l => l.action === actionKey)
+                  .map(l => ({
+                    '고객명': custMap[l.customerId] ?? '-',
+                    '페이지': l.pageUrl,
+                    '시각': l.timestamp.slice(0, 16).replace('T', ' '),
+                  }));
+                const prev = funnelData.find(f => f.stage === data.stage);
+                setDetail({
+                  title: `${data.stage} 단계 상세`,
+                  subtitle: `${data.count}명`,
+                  color: prev?.color,
+                  columns: ['고객명', '페이지', '시각'],
+                  rows,
+                });
+              }}>
               {funnelData.map(e => <Cell key={e.stage} fill={e.color} />)}
             </Bar>
           </BarChart>
@@ -135,6 +198,7 @@ export function UserBehavior() {
           })}
         </div>
       </div>
+      <ChartDetailPanel data={detail} onClose={() => setDetail(null)} />
     </div>
   );
 }

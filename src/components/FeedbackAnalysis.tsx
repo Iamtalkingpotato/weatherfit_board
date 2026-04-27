@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { temperatureFeedbacks, customers, getRegion, FEEDBACK_LABEL, WEATHER_LABEL } from '../data/mockData';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
 
 export function FeedbackAnalysis() {
+  const [detail, setDetail] = useState<DetailData | null>(null);
   const total   = temperatureFeedbacks.length;
   const hot     = temperatureFeedbacks.filter(f => f.feedback === 'HOT').length;
   const cold    = temperatureFeedbacks.filter(f => f.feedback === 'COLD').length;
@@ -69,8 +72,25 @@ export function FeedbackAnalysis() {
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
-                {pieData.map(e => <Cell key={e.name} fill={e.color} />)}
+                label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}
+                cursor="pointer"
+                onClick={(data: any) => {
+                  const fbKey = data.name === '덥다' ? 'HOT' : data.name === '춥다' ? 'COLD' : 'PERFECT';
+                  const rows = temperatureFeedbacks
+                    .filter(f => f.feedback === fbKey)
+                    .map(f => {
+                      const c = customers.find(x => x.id === f.customerId);
+                      return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '날짜': f.feedbackDate, '지역': getRegion(f.regionId)?.city ?? '-' };
+                    });
+                  setDetail({
+                    title: `"${data.name}" 피드백 상세`,
+                    subtitle: `총 ${rows.length}건`,
+                    color: pieData.find(d => d.name === data.name)?.color,
+                    columns: ['고객명', '실제온도', '날짜', '지역'],
+                    rows,
+                  });
+                }}>
+                {pieData.map(e => <Cell key={e.name} fill={e.color} cursor="pointer" />)}
               </Pie>
               <Tooltip />
             </PieChart>
@@ -86,9 +106,42 @@ export function FeedbackAnalysis() {
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
               <Legend />
-              <Bar dataKey="덥다"    fill="#ef4444" stackId="a" />
-              <Bar dataKey="적당했다" fill="#10b981" stackId="a" />
-              <Bar dataKey="춥다"    fill="#3b82f6" stackId="a" radius={[4,4,0,0]} />
+              <Bar dataKey="덥다"    fill="#ef4444" stackId="a" cursor="pointer"
+                onClick={(data: any) => {
+                  const city = data.city;
+                  const rows = temperatureFeedbacks
+                    .filter(f => getRegion(f.regionId)?.city === city && f.feedback === 'HOT')
+                    .map(f => {
+                      const c = customers.find(x => x.id === f.customerId);
+                      return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '체감온도': `${f.feelsLikeTemp}°C`, '날짜': f.feedbackDate };
+                    });
+                  setDetail({ title: `${city} — "덥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#ef4444', columns: ['고객명', '실제온도', '체감온도', '날짜'], rows });
+                }}
+              />
+              <Bar dataKey="적당했다" fill="#10b981" stackId="a" cursor="pointer"
+                onClick={(data: any) => {
+                  const city = data.city;
+                  const rows = temperatureFeedbacks
+                    .filter(f => getRegion(f.regionId)?.city === city && f.feedback === 'PERFECT')
+                    .map(f => {
+                      const c = customers.find(x => x.id === f.customerId);
+                      return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '체감온도': `${f.feelsLikeTemp}°C`, '날짜': f.feedbackDate };
+                    });
+                  setDetail({ title: `${city} — "적당했다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#10b981', columns: ['고객명', '실제온도', '체감온도', '날짜'], rows });
+                }}
+              />
+              <Bar dataKey="춥다"    fill="#3b82f6" stackId="a" radius={[4,4,0,0]} cursor="pointer"
+                onClick={(data: any) => {
+                  const city = data.city;
+                  const rows = temperatureFeedbacks
+                    .filter(f => getRegion(f.regionId)?.city === city && f.feedback === 'COLD')
+                    .map(f => {
+                      const c = customers.find(x => x.id === f.customerId);
+                      return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '체감온도': `${f.feelsLikeTemp}°C`, '날짜': f.feedbackDate };
+                    });
+                  setDetail({ title: `${city} — "춥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#3b82f6', columns: ['고객명', '실제온도', '체감온도', '날짜'], rows });
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -103,9 +156,51 @@ export function FeedbackAnalysis() {
             <YAxis tick={{ fontSize: 12 }} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="덥다"    fill="#ef4444" stackId="a" />
-            <Bar dataKey="적당했다" fill="#10b981" stackId="a" />
-            <Bar dataKey="춥다"    fill="#3b82f6" stackId="a" radius={[4,4,0,0]} />
+            <Bar dataKey="덥다"    fill="#ef4444" stackId="a" cursor="pointer"
+              onClick={(data: any) => {
+                const range = data.range as string;
+                const [minStr] = range.split('~');
+                const minT = parseInt(minStr);
+                const maxT = minT + 5;
+                const rows = temperatureFeedbacks
+                  .filter(f => f.actualTemp >= minT && f.actualTemp < maxT && f.feedback === 'HOT')
+                  .map(f => {
+                    const c = customers.find(x => x.id === f.customerId);
+                    return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '체감온도': `${f.feelsLikeTemp}°C`, '날짜': f.feedbackDate };
+                  });
+                setDetail({ title: `${range} — "덥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#ef4444', columns: ['고객명', '실제온도', '체감온도', '날짜'], rows });
+              }}
+            />
+            <Bar dataKey="적당했다" fill="#10b981" stackId="a" cursor="pointer"
+              onClick={(data: any) => {
+                const range = data.range as string;
+                const [minStr] = range.split('~');
+                const minT = parseInt(minStr);
+                const maxT = minT + 5;
+                const rows = temperatureFeedbacks
+                  .filter(f => f.actualTemp >= minT && f.actualTemp < maxT && f.feedback === 'PERFECT')
+                  .map(f => {
+                    const c = customers.find(x => x.id === f.customerId);
+                    return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '체감온도': `${f.feelsLikeTemp}°C`, '날짜': f.feedbackDate };
+                  });
+                setDetail({ title: `${range} — "적당했다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#10b981', columns: ['고객명', '실제온도', '체감온도', '날짜'], rows });
+              }}
+            />
+            <Bar dataKey="춥다"    fill="#3b82f6" stackId="a" radius={[4,4,0,0]} cursor="pointer"
+              onClick={(data: any) => {
+                const range = data.range as string;
+                const [minStr] = range.split('~');
+                const minT = parseInt(minStr);
+                const maxT = minT + 5;
+                const rows = temperatureFeedbacks
+                  .filter(f => f.actualTemp >= minT && f.actualTemp < maxT && f.feedback === 'COLD')
+                  .map(f => {
+                    const c = customers.find(x => x.id === f.customerId);
+                    return { '고객명': c?.name ?? '-', '실제온도': `${f.actualTemp}°C`, '체감온도': `${f.feelsLikeTemp}°C`, '날짜': f.feedbackDate };
+                  });
+                setDetail({ title: `${range} — "춥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#3b82f6', columns: ['고객명', '실제온도', '체감온도', '날짜'], rows });
+              }}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -147,6 +242,7 @@ export function FeedbackAnalysis() {
           </table>
         </div>
       </div>
+      <ChartDetailPanel data={detail} onClose={() => setDetail(null)} />
     </div>
   );
 }
