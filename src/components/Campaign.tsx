@@ -359,7 +359,7 @@ function CategoryCombobox({
 // ─── Tree node component ──────────────────────────────────────────────────────
 
 function TreeItem({
-  node, expanded, onToggle, onAdd, query, fieldNumbers,
+  node, expanded, onToggle, onAdd, query, fieldNumbers, usedFieldIds,
 }: {
   node: TreeNode;
   expanded: Set<string>;
@@ -367,10 +367,12 @@ function TreeItem({
   onAdd: (node: TreeNode) => void;
   query: string;
   fieldNumbers: Map<string, number>;
+  usedFieldIds: Set<string>;
 }) {
   if (!hasMatch(node, query)) return null;
 
   if (node.type === 'field') {
+    if (usedFieldIds.has(node.id)) return null;
     const typeColor: Record<string, string> = { number: 'bg-blue-500', string: 'bg-orange-400', date: 'bg-green-500', select: 'bg-purple-500' };
     const dt  = node.dataType ?? 'string';
     const num = fieldNumbers.get(node.id);
@@ -401,7 +403,7 @@ function TreeItem({
       {open && node.children && (
         <div className="ml-3 border-l border-gray-100 pl-1">
           {node.children.map(c => (
-            <TreeItem key={c.id} node={c} expanded={expanded} onToggle={onToggle} onAdd={onAdd} query={query} fieldNumbers={fieldNumbers} />
+            <TreeItem key={c.id} node={c} expanded={expanded} onToggle={onToggle} onAdd={onAdd} query={query} fieldNumbers={fieldNumbers} usedFieldIds={usedFieldIds} />
           ))}
         </div>
       )}
@@ -556,6 +558,8 @@ function FilterBuilder({
     [fields]
   );
 
+  const usedFieldIds = useMemo(() => new Set(conditions.map(c => c.fieldId)), [conditions]);
+
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['customer', 'weatherfit', 'feedback', 'purchase']));
   const [treeQuery, setTreeQuery] = useState('');
   const [queryResult, setQueryResult] = useState<{ total: number; customers: CustomerStat[] } | null>(null);
@@ -691,7 +695,7 @@ function FilterBuilder({
           </div>
           <div className="overflow-y-auto flex-1 p-1.5 space-y-0.5">
             {filteredTree.map(node => (
-              <TreeItem key={node.id} node={node} expanded={expanded} onToggle={toggleExpanded} onAdd={addCondition} query={treeQuery} fieldNumbers={fieldNumbers} />
+              <TreeItem key={node.id} node={node} expanded={expanded} onToggle={toggleExpanded} onAdd={addCondition} query={treeQuery} fieldNumbers={fieldNumbers} usedFieldIds={usedFieldIds} />
             ))}
           </div>
           <div className="border-t border-gray-200">

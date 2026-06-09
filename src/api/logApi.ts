@@ -269,6 +269,10 @@ export async function getCustomers() {
   return requestJson('/api/admin/customers');
 }
 
+export async function deleteCustomer(customerId: number) {
+  await requestJson(`/api/admin/customers/${customerId}`, { method: 'DELETE' });
+}
+
 export async function getCustomerFeedbacks(customerId: number) {
   return requestJson(`/api/feedbacks/customer/${customerId}`);
 }

@@ -1,10 +1,12 @@
 ﻿import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
-import { Search, User, Mail, Calendar, Award, Phone, TrendingUp, MessageSquare } from 'lucide-react';
-import { getCustomers, getCustomerPurchases, getCustomerPreferences, getColors, getProducts, getCustomerCoupons, getCoupons } from '../api/logApi';
+import { Search, User, Mail, Calendar, Award, Phone, TrendingUp, MessageSquare, Trash2 } from 'lucide-react';
+import { getCustomers, getCustomerPurchases, getCustomerPreferences, getColors, getProducts, getCustomerCoupons, getCoupons, deleteCustomer } from '../api/logApi';
 
 // ─── Label constants ───────────────────────────────────────────────────────────
-const GENDER_LABEL: Record<string, string> = { MALE: '남성', FEMALE: '여성' };
+const GENDER_LABEL:    Record<string, string> = { MALE: '남성', FEMALE: '여성' };
+const ACTIVITY_LABEL:  Record<string, string> = { HIGH: '높음', MEDIUM: '보통', LOW: '낮음' };
+const COLD_LABEL:      Record<number, string> = { 1: '추위 많이 탐', 2: '추위 탐', 3: '보통', 4: '더위 탐', 5: '더위 많이 탐' };
 const MEMBERSHIP_LABEL: Record<string, string> = { BASIC: '일반', SILVER: '실버', GOLD: '골드', VIP: 'VIP' };
 const MEMBERSHIP_BADGE: Record<string, string> = {
   BASIC:  'bg-gray-100 text-gray-600',
@@ -51,14 +53,7 @@ function fmtDatetime(raw: string | null | undefined): string {
   return `${yy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
-const coldLabel = (v: number) => {
-  if (v === 1) return '많이 추위탐';
-  if (v === 2) return '추위탐';
-  if (v === 3) return '보통';
-  if (v === 4) return '더위탐';
-  if (v === 5) return '많이 더위탐';
-  return '-';
-};
+const coldLabel = (v: number) => COLD_LABEL[v] ?? '-';
 
 const TABS_DEF = ['기본', '선호', '구매', '찜', '장바구니', '쿠폰'] as const;
 type Tab = typeof TABS_DEF[number];
@@ -79,6 +74,8 @@ export function Customers() {
   const [allCoupons, setAllCoupons] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [colors, setColors] = useState<any[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getCustomers().then(data => setCustomers(Array.isArray(data) ? data : [])).catch(() => setCustomers([]));
@@ -127,6 +124,21 @@ export function Customers() {
   const cart      = sortDesc(allPurchases.filter(p => p.status === 'CART'));
 
   const TABS = TABS_DEF;
+
+  const handleDeleteCustomer = async (id: number) => {
+    setDeleting(true);
+    try {
+      await deleteCustomer(id);
+      setCustomers(prev => prev.filter(c => c.id !== id));
+      setSelectedId(null);
+      setSearchParams({}, { replace: true });
+      setDeleteConfirmId(null);
+    } catch (e: any) {
+      alert(e.message ?? '삭제 실패');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // ── 선호 API 파서: 단순 값 배열 OR {value, count} 객체 배열 모두 지원 ────
   const parsePrefs = {
@@ -200,6 +212,7 @@ export function Customers() {
                 className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedId === c.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
                 <p className={`font-medium text-sm mb-0.5 ${c.isFraud ? 'text-red-600' : 'text-gray-900'}`}>
                   {c.name}
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">#{c.id}</span>
                   {c.isFraud && <span className="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200">부정</span>}
                 </p>
                 <p className="text-xs text-gray-500 mb-1">{c.email}</p>
@@ -220,18 +233,53 @@ export function Customers() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
 
               {/* 탭 (1번: 피드백 삭제, 2번: 옷장 삭제) */}
-              <div className="flex border-b border-gray-100 overflow-x-auto">
-                {TABS.map(t => (
-                  <button key={t} onClick={() => setTab(t)}
-                    className={`px-4 py-2.5 text-sm whitespace-nowrap border-b-2 transition-colors ${tab === t ? 'border-blue-500 text-blue-600 font-medium' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                    {t}
-                    {t === '구매'    && purchases.length > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{purchases.length}</span>}
-                    {t === '찜'      && wishlist.length  > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{wishlist.length}</span>}
-                    {t === '장바구니' && cart.length      > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{cart.length}</span>}
-                    {t === '쿠폰'    && coupons.length   > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{coupons.length}</span>}
-                  </button>
-                ))}
+              <div className="flex items-center border-b border-gray-100 overflow-x-auto">
+                <div className="flex flex-1">
+                  {TABS.map(t => (
+                    <button key={t} onClick={() => setTab(t)}
+                      className={`px-4 py-2.5 text-sm whitespace-nowrap border-b-2 transition-colors ${tab === t ? 'border-blue-500 text-blue-600 font-medium' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                      {t}
+                      {t === '구매'    && purchases.length > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{purchases.length}</span>}
+                      {t === '찜'      && wishlist.length  > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{wishlist.length}</span>}
+                      {t === '장바구니' && cart.length      > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{cart.length}</span>}
+                      {t === '쿠폰'    && coupons.length   > 0 && <span className="ml-1 text-xs bg-gray-100 text-gray-500 px-1.5 rounded-full">{coupons.length}</span>}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setDeleteConfirmId(selected.id)}
+                  className="mr-3 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                  title="고객 삭제">
+                  <Trash2 size={15} />
+                </button>
               </div>
+
+              {/* 삭제 확인 모달 */}
+              {deleteConfirmId !== null && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+                  <div className="bg-white rounded-xl shadow-lg p-6 w-80">
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">고객 삭제</h3>
+                    <p className="text-sm text-gray-600 mb-1">
+                      <span className="font-medium">{selected.name}</span> ({selected.email}) 고객을 삭제하시겠습니까?
+                    </p>
+                    <p className="text-xs text-gray-400 mb-5">삭제 후 동일 이메일로 재가입이 가능합니다.</p>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setDeleteConfirmId(null)}
+                        disabled={deleting}
+                        className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                        취소
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCustomer(deleteConfirmId)}
+                        disabled={deleting}
+                        className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-60">
+                        {deleting ? '삭제 중...' : '삭제'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 4번: p-6→p-4 */}
               <div className="p-4">
@@ -289,7 +337,7 @@ export function Customers() {
                     <div className="grid grid-cols-4 gap-2">
                       {[
                         { label: '성별',       value: GENDER_LABEL[selected.gender] ?? selected.gender },
-                        { label: '활동량',     value: selected.activityLevel === 'HIGH' ? '높음' : selected.activityLevel === 'MEDIUM' ? '보통' : '낮음' },
+                        { label: '활동량',     value: ACTIVITY_LABEL[selected.activityLevel] ?? selected.activityLevel },
                         { label: '추위 민감도', value: coldLabel(selected.coldSensitivity) },
                         { label: '선호 스타일', value: styleLabel(selected.preferredStyle) },
                       ].map(item => (

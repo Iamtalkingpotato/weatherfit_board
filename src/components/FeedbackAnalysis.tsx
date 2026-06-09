@@ -20,8 +20,14 @@ const WEATHER_LABEL: Record<string, string> = {
   RAIN: '비', SNOW: '눈', FOG: '안개', WIND: '바람', THUNDER: '천둥번개',
   SLEET: '진눈깨비', HAIL: '우박', DUST: '황사', SMOKE: '연기',
 };
-import { TrendingUp, TrendingDown, Minus, Search, Activity, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Search, Activity, RefreshCw, Calendar } from 'lucide-react';
 import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
+
+type RangeType = 'today' | '7d' | 'custom';
+
+function toLocalDateStr(d: Date): string {
+  return d.toLocaleDateString('sv-SE');
+}
 
 const fbDate = (f: any): string => f.feedbackDate ?? f.createdAt ?? '';
 
@@ -32,6 +38,29 @@ export function FeedbackAnalysis() {
   const [regions, setRegions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tableSearch, setTableSearch] = useState('');
+
+  // ── 날짜 필터 ─────────────────────────────────────────────────────────────
+  const [rangeType, setRangeType] = useState<RangeType>('today');
+  const todayStr = toLocalDateStr(new Date());
+  const [customStart, setCustomStart] = useState(toLocalDateStr(new Date(Date.now() - 29 * 86400000)));
+  const [customEnd,   setCustomEnd]   = useState(todayStr);
+
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    const t = toLocalDateStr(new Date());
+    if (rangeType === 'today') return { rangeStart: t, rangeEnd: t };
+    if (rangeType === '7d')    return { rangeStart: toLocalDateStr(new Date(Date.now() - 6 * 86400000)), rangeEnd: t };
+    return { rangeStart: customStart || t, rangeEnd: customEnd || t };
+  }, [rangeType, customStart, customEnd]);
+
+  // 날짜 필터 적용된 피드백
+  const allFeedbacks = useMemo(() => {
+    return feedbacks.filter(f => {
+      const raw = f.feedbackDate ?? f.createdAt;
+      if (!raw) return false;
+      const d = String(raw).slice(0, 10).replace(/\./g, '-');
+      return d >= rangeStart && d <= rangeEnd;
+    });
+  }, [feedbacks, rangeStart, rangeEnd]);
 
   const load = () => {
     setLoading(true);
@@ -47,10 +76,10 @@ export function FeedbackAnalysis() {
     load();
   }, []);
 
-  const total   = feedbacks.length;
-  const hot     = feedbacks.filter(f => f.feedback === 'HOT').length;
-  const cold    = feedbacks.filter(f => f.feedback === 'COLD').length;
-  const perfect = feedbacks.filter(f => f.feedback === 'PERFECT').length;
+  const total   = allFeedbacks.length;
+  const hot     = allFeedbacks.filter(f => f.feedback === 'HOT').length;
+  const cold    = allFeedbacks.filter(f => f.feedback === 'COLD').length;
+  const perfect = allFeedbacks.filter(f => f.feedback === 'PERFECT').length;
 
   const stats = [
     { name:'전체',    count: total,   pct: '100',                                           icon: Activity,     bg:'bg-gray-50',  iconBg:'bg-gray-500',  text:'text-gray-600',  color:'#6b7280', fbKey: null    },
@@ -63,26 +92,31 @@ export function FeedbackAnalysis() {
     () => Object.fromEntries(customers.map(c => [String(c.id), c.name])),
     [customers],
   );
-  const tempMap: Record<string, Record<string, number>> = {};
-  feedbacks.forEach(f => {
-    const temp = f.temperature ?? 0;
-    const range = `${Math.floor(temp/5)*5}~${Math.floor(temp/5)*5+5}°C`;
-    if (!tempMap[range]) tempMap[range] = { 덥다:0, 춥다:0, 적당했다:0 };
-    const label = FEEDBACK_LABEL[f.feedback];
-    if (label) tempMap[range][label]++;
-  });
-  const tempData = Object.entries(tempMap)
-    .map(([range, v]) => ({ range, ...v }))
-    .sort((a, b) => parseInt(a.range) - parseInt(b.range));
 
-  const cityMap: Record<string, Record<string, number>> = {};
-  feedbacks.forEach(f => {
-    const city = f.regionName ?? '기타';
-    if (!cityMap[city]) cityMap[city] = { 덥다:0, 춥다:0, 적당했다:0 };
-    const label = FEEDBACK_LABEL[f.feedback];
-    if (label) cityMap[city][label]++;
-  });
-  const cityData = Object.entries(cityMap).map(([city, v]) => ({ city, ...v }));
+  const tempData = useMemo(() => {
+    const tempMap: Record<string, Record<string, number>> = {};
+    allFeedbacks.forEach(f => {
+      const temp = f.temperature ?? 0;
+      const range = `${Math.floor(temp/5)*5}~${Math.floor(temp/5)*5+5}°C`;
+      if (!tempMap[range]) tempMap[range] = { 덥다:0, 춥다:0, 적당했다:0 };
+      const label = FEEDBACK_LABEL[f.feedback];
+      if (label) tempMap[range][label]++;
+    });
+    return Object.entries(tempMap)
+      .map(([range, v]) => ({ range, ...v }))
+      .sort((a, b) => parseInt(a.range) - parseInt(b.range));
+  }, [allFeedbacks]);
+
+  const cityData = useMemo(() => {
+    const cityMap: Record<string, Record<string, number>> = {};
+    allFeedbacks.forEach(f => {
+      const city = f.regionName ?? '기타';
+      if (!cityMap[city]) cityMap[city] = { 덥다:0, 춥다:0, 적당했다:0 };
+      const label = FEEDBACK_LABEL[f.feedback];
+      if (label) cityMap[city][label]++;
+    });
+    return Object.entries(cityMap).map(([city, v]) => ({ city, ...v }));
+  }, [allFeedbacks]);
 
   const buildDetailRows = (list: TemperatureFeedback[]) =>
     [...list].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).map(f => ({
@@ -93,10 +127,9 @@ export function FeedbackAnalysis() {
     }));
   const detailColumns = ['고객명', '지역', '실제온도', '날짜'];
 
-  // 최근 피드백 정렬 + 검색
   const sortedFeedbacks = useMemo(
-    () => [...feedbacks].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)),
-    [feedbacks],
+    () => [...allFeedbacks].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)),
+    [allFeedbacks],
   );
   const filteredTable = useMemo(() => {
     if (!tableSearch.trim()) return sortedFeedbacks.slice(0, 50);
@@ -112,19 +145,68 @@ export function FeedbackAnalysis() {
 
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between">
+      {/* 헤더 */}
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900 mb-1">온도 피드백 분석</h1>
           <p className="text-gray-500 text-sm">고객이 느끼는 체감 온도 분석</p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          새로고침
-        </button>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 날짜 필터 */}
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+            {([
+              { key: 'today',  label: '오늘' },
+              { key: '7d',     label: '7일'  },
+              { key: 'custom', label: '원하는 기간' },
+            ] as { key: RangeType; label: string }[]).map(btn => (
+              <button
+                key={btn.key}
+                onClick={() => setRangeType(btn.key)}
+                className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  rangeType === btn.key
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
+          {rangeType === 'custom' && (
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm">
+              <Calendar size={13} className="text-gray-400 shrink-0" />
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd}
+                min={toLocalDateStr(new Date(new Date(customEnd).getTime() - 5 * 365 * 86400000))}
+                onChange={e => setCustomStart(e.target.value)}
+                className="text-xs border-none outline-none bg-transparent text-gray-700 cursor-pointer"
+              />
+              <span className="text-gray-300 text-xs">~</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={toLocalDateStr(new Date(new Date(customStart).getTime() + 5 * 365 * 86400000))}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="text-xs border-none outline-none bg-transparent text-gray-700 cursor-pointer"
+              />
+            </div>
+          )}
+
+          {/* 새로고침 */}
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            새로고침
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -133,6 +215,12 @@ export function FeedbackAnalysis() {
         <div className="flex items-center justify-center h-64 text-gray-400 text-sm">데이터가 없습니다</div>
       ) : (
         <>
+          {total === 0 && (
+            <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+              선택한 기간에 피드백 데이터가 없습니다.
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-4 mb-6">
             {stats.map(s => {
               const Icon = s.icon;
@@ -141,7 +229,7 @@ export function FeedbackAnalysis() {
                   key={s.name}
                   className={`${s.bg} rounded-xl p-5 border border-gray-200 cursor-pointer hover:shadow-md transition-shadow`}
                   onClick={() => {
-                    const list = s.fbKey ? feedbacks.filter(f => f.feedback === s.fbKey) : feedbacks;
+                    const list = s.fbKey ? allFeedbacks.filter(f => f.feedback === s.fbKey) : allFeedbacks;
                     const rows = buildDetailRows(list);
                     const title = s.name === '전체' ? '전체 피드백 상세' : `"${s.name}" 피드백 상세`;
                     setDetail({ title, subtitle: `총 ${rows.length}건`, color: s.color, columns: detailColumns, rows });
@@ -159,7 +247,10 @@ export function FeedbackAnalysis() {
           </div>
 
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">지역(시)별 피드백</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">지역(시)별 피드백</h2>
+            {cityData.length === 0 ? (
+              <div className="flex items-center justify-center h-48 text-gray-400 text-sm">데이터 없음</div>
+            ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={cityData} margin={{ left: 0, right: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -176,61 +267,66 @@ export function FeedbackAnalysis() {
                   <Legend />
                   <Bar dataKey="덥다" fill="#ef4444" stackId="a" cursor="pointer"
                     onClick={(data: any) => {
-                      const rows = buildDetailRows(feedbacks.filter(f => (f.regionName ?? '기타') === data.city && f.feedback === 'HOT'));
+                      const rows = buildDetailRows(allFeedbacks.filter(f => (f.regionName ?? '기타') === data.city && f.feedback === 'HOT'));
                       setDetail({ title: `${data.city} — "덥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#ef4444', columns: detailColumns, rows });
                     }}
                   />
                   <Bar dataKey="적당했다" fill="#10b981" stackId="a" cursor="pointer"
                     onClick={(data: any) => {
-                      const rows = buildDetailRows(feedbacks.filter(f => (f.regionName ?? '기타') === data.city && f.feedback === 'PERFECT'));
+                      const rows = buildDetailRows(allFeedbacks.filter(f => (f.regionName ?? '기타') === data.city && f.feedback === 'PERFECT'));
                       setDetail({ title: `${data.city} — "적당했다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#10b981', columns: detailColumns, rows });
                     }}
                   />
                   <Bar dataKey="춥다" fill="#3b82f6" stackId="a" radius={[4,4,0,0]} cursor="pointer"
                     onClick={(data: any) => {
-                      const rows = buildDetailRows(feedbacks.filter(f => (f.regionName ?? '기타') === data.city && f.feedback === 'COLD'));
+                      const rows = buildDetailRows(allFeedbacks.filter(f => (f.regionName ?? '기타') === data.city && f.feedback === 'COLD'));
                       setDetail({ title: `${data.city} — "춥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#3b82f6', columns: detailColumns, rows });
                     }}
                   />
                 </BarChart>
               </ResponsiveContainer>
+            )}
           </div>
 
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">온도 구간별 피드백 분포</h2>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={tempData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip cursor={{ fill: 'transparent' }} />
-                <Legend />
-                <Bar dataKey="덥다" fill="#ef4444" stackId="a" cursor="pointer"
-                  onClick={(data: any) => {
-                    const [minStr] = (data.range as string).split('~');
-                    const minT = parseInt(minStr); const maxT = minT + 5;
-                    const rows = buildDetailRows(feedbacks.filter(f => (f.temperature ?? 0) >= minT && (f.temperature ?? 0) < maxT && f.feedback === 'HOT'));
-                    setDetail({ title: `${data.range} — "덥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#ef4444', columns: detailColumns, rows });
-                  }}
-                />
-                <Bar dataKey="적당했다" fill="#10b981" stackId="a" cursor="pointer"
-                  onClick={(data: any) => {
-                    const [minStr] = (data.range as string).split('~');
-                    const minT = parseInt(minStr); const maxT = minT + 5;
-                    const rows = buildDetailRows(feedbacks.filter(f => (f.temperature ?? 0) >= minT && (f.temperature ?? 0) < maxT && f.feedback === 'PERFECT'));
-                    setDetail({ title: `${data.range} — "적당했다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#10b981', columns: detailColumns, rows });
-                  }}
-                />
-                <Bar dataKey="춥다" fill="#3b82f6" stackId="a" radius={[4,4,0,0]} cursor="pointer"
-                  onClick={(data: any) => {
-                    const [minStr] = (data.range as string).split('~');
-                    const minT = parseInt(minStr); const maxT = minT + 5;
-                    const rows = buildDetailRows(feedbacks.filter(f => (f.temperature ?? 0) >= minT && (f.temperature ?? 0) < maxT && f.feedback === 'COLD'));
-                    setDetail({ title: `${data.range} — "춥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#3b82f6', columns: detailColumns, rows });
-                  }}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {tempData.length === 0 ? (
+              <div className="flex items-center justify-center h-48 text-gray-400 text-sm">데이터 없음</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={tempData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip cursor={{ fill: 'transparent' }} />
+                  <Legend />
+                  <Bar dataKey="덥다" fill="#ef4444" stackId="a" cursor="pointer"
+                    onClick={(data: any) => {
+                      const [minStr] = (data.range as string).split('~');
+                      const minT = parseInt(minStr); const maxT = minT + 5;
+                      const rows = buildDetailRows(allFeedbacks.filter(f => (f.temperature ?? 0) >= minT && (f.temperature ?? 0) < maxT && f.feedback === 'HOT'));
+                      setDetail({ title: `${data.range} — "덥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#ef4444', columns: detailColumns, rows });
+                    }}
+                  />
+                  <Bar dataKey="적당했다" fill="#10b981" stackId="a" cursor="pointer"
+                    onClick={(data: any) => {
+                      const [minStr] = (data.range as string).split('~');
+                      const minT = parseInt(minStr); const maxT = minT + 5;
+                      const rows = buildDetailRows(allFeedbacks.filter(f => (f.temperature ?? 0) >= minT && (f.temperature ?? 0) < maxT && f.feedback === 'PERFECT'));
+                      setDetail({ title: `${data.range} — "적당했다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#10b981', columns: detailColumns, rows });
+                    }}
+                  />
+                  <Bar dataKey="춥다" fill="#3b82f6" stackId="a" radius={[4,4,0,0]} cursor="pointer"
+                    onClick={(data: any) => {
+                      const [minStr] = (data.range as string).split('~');
+                      const minT = parseInt(minStr); const maxT = minT + 5;
+                      const rows = buildDetailRows(allFeedbacks.filter(f => (f.temperature ?? 0) >= minT && (f.temperature ?? 0) < maxT && f.feedback === 'COLD'));
+                      setDetail({ title: `${data.range} — "춥다" 피드백`, subtitle: `총 ${rows.length}건`, color: '#3b82f6', columns: detailColumns, rows });
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
@@ -257,27 +353,31 @@ export function FeedbackAnalysis() {
                 <thead>
                   <tr className="border-b border-gray-200 text-gray-600">
                     {([
-                      ['날짜',    'text-right'],
-                      ['고객',    'text-left'],
-                      ['지역',    'text-left'],
-                      ['실제온도', 'text-right'],
-                      ['습도',    'text-right'],
-                      ['날씨',    'text-left'],
-                      ['피드백',  'text-center'],
-                    ] as [string, string][]).map(([h, align]) => (
-                      <th key={h} className={`${align} py-3 px-3 font-medium`}>{h}</th>
+                      ['날짜',    'text-right', ''],
+                      ['고객',    'text-left',  ''],
+                      ['지역',    'text-left',  'w-24 max-w-[6rem]'],
+                      ['실제온도', 'text-right', 'w-20'],
+                      ['습도',    'text-right',  ''],
+                      ['날씨',    'text-left',   ''],
+                      ['피드백',  'text-center', ''],
+                    ] as [string, string, string][]).map(([h, align, w]) => (
+                      <th key={h} className={`${align} ${w} py-3 px-3 font-medium`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTable.map((f, i) => {
+                  {filteredTable.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-gray-400 text-sm">데이터가 없습니다</td>
+                    </tr>
+                  ) : filteredTable.map((f, i) => {
                     const fbLabel = FEEDBACK_LABEL[f.feedback] ?? f.feedback;
                     return (
                       <tr key={f.id ?? i} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-2.5 px-3 text-right">{fbDate(f) || '-'}</td>
                         <td className="py-2.5 px-3 font-medium">{custMap[String(f.customerId)] ?? '-'}</td>
-                        <td className="py-2.5 px-3 text-gray-500">{f.regionName ?? '-'}</td>
-                        <td className="py-2.5 px-3 text-right">{f.temperature != null ? `${f.temperature}°C` : '-'}</td>
+                        <td className="py-2.5 px-3 text-gray-500 w-24 max-w-[6rem] truncate">{f.regionName ?? '-'}</td>
+                        <td className="py-2.5 px-3 text-right w-20">{f.temperature != null ? `${f.temperature}°C` : '-'}</td>
                         <td className="py-2.5 px-3 text-right text-gray-500">{f.humidity != null ? `${f.humidity}%` : '-'}</td>
                         <td className="py-2.5 px-3 text-gray-500">{WEATHER_LABEL[f.weatherCondition] ?? f.weatherCondition ?? '-'}</td>
                         <td className="py-2.5 px-3 text-center">

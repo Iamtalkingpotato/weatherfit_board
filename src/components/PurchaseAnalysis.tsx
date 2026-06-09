@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getAllPurchases, getCustomers, getProducts } from '../api/logApi';
+import { Calendar } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = { OUTER: '아우터', TOP: '상의', BOTTOM: '하의', ACCESSORY: '악세서리' };
 const STATUS_LABEL: Record<string, string> = { PURCHASED: '구매완료', WISHLIST: '찜', CART: '장바구니', VIEW_ONLY: '조회만함' };
@@ -13,6 +14,19 @@ const STYLE_LABEL: Record<string, string> = {
 };
 import { ShoppingBag, Heart, ShoppingCart, DollarSign, TrendingUp } from 'lucide-react';
 import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
+
+type RangeType = 'today' | '7d' | 'custom';
+
+function toLocalDateStr(d: Date): string {
+  return d.toLocaleDateString('sv-SE'); // "yyyy-mm-dd"
+}
+
+function getRangeStartEnd(type: RangeType, customStart: string, customEnd: string): { start: string; end: string } {
+  const today = toLocalDateStr(new Date());
+  if (type === 'today') return { start: today, end: today };
+  if (type === '7d')    return { start: toLocalDateStr(new Date(Date.now() - 6 * 86400000)), end: today };
+  return { start: customStart || toLocalDateStr(new Date(Date.now() - 6 * 86400000)), end: customEnd || today };
+}
 
 const parseDate = (raw: string): Date => new Date(raw.replace(/\./g, '-').replace(' ', 'T'));
 
@@ -49,10 +63,15 @@ const styleLabel = (style: string) => {
 
 export function PurchaseAnalysis() {
   const [detail, setDetail] = useState<DetailData | null>(null);
-  const [allPurchases, setAllPurchases] = useState<any[]>([]);
+  const [rawPurchases, setRawPurchases] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [rangeType, setRangeType] = useState<RangeType>('today');
+  const today = toLocalDateStr(new Date());
+  const [customStart, setCustomStart] = useState(toLocalDateStr(new Date(Date.now() - 29 * 86400000)));
+  const [customEnd, setCustomEnd] = useState(today);
 
   useEffect(() => {
     Promise.all([
@@ -61,13 +80,24 @@ export function PurchaseAnalysis() {
       getProducts().catch(() => []),
     ])
       .then(([purs, custs, prods]) => {
-        setAllPurchases(Array.isArray(purs) ? purs : []);
+        setRawPurchases(Array.isArray(purs) ? purs : []);
         setCustomers(Array.isArray(custs) ? custs : []);
         setProducts(Array.isArray(prods) ? prods : []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const { start: rangeStart, end: rangeEnd } = getRangeStartEnd(rangeType, customStart, customEnd);
+
+  const allPurchases = useMemo(() => {
+    return rawPurchases.filter(p => {
+      const raw = p.purchasedAt ?? p.purchaseDate ?? p.createdAt;
+      if (!raw) return false;
+      const d = String(raw).slice(0, 10).replace(/\./g, '-');
+      return d >= rangeStart && d <= rangeEnd;
+    });
+  }, [rawPurchases, rangeStart, rangeEnd]);
 
   const purchased = allPurchases.filter(p => p.status === 'PURCHASED');
   const wishlist  = allPurchases.filter(p => p.status === 'WISHLIST');
@@ -131,14 +161,62 @@ export function PurchaseAnalysis() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900 mb-1">구매 분석</h1>
-        <p className="text-gray-500 text-sm">구매·찜·장바구니 현황</p>
+      <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 mb-0.5">구매 분석</h1>
+          <p className="text-gray-500 text-sm">구매·찜·장바구니 현황</p>
+        </div>
+
+        {/* ── 날짜 필터 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+            {([
+              { key: 'today', label: '오늘' },
+              { key: '7d',   label: '7일'  },
+              { key: 'custom', label: '원하는 기간' },
+            ] as { key: RangeType; label: string }[]).map(btn => (
+              <button
+                key={btn.key}
+                onClick={() => setRangeType(btn.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  rangeType === btn.key
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
+          {rangeType === 'custom' && (
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm">
+              <Calendar size={13} className="text-gray-400 shrink-0" />
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd}
+                min={toLocalDateStr(new Date(new Date(customEnd).getTime() - 5 * 365 * 86400000))}
+                onChange={e => setCustomStart(e.target.value)}
+                className="text-xs border-none outline-none bg-transparent text-gray-700 cursor-pointer"
+              />
+              <span className="text-gray-300 text-xs">~</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={toLocalDateStr(new Date(new Date(customStart).getTime() + 5 * 365 * 86400000))}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="text-xs border-none outline-none bg-transparent text-gray-700 cursor-pointer"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-64 text-gray-400 text-sm">데이터를 불러오는 중...</div>
-      ) : allPurchases.length === 0 ? (
+      ) : rawPurchases.length === 0 ? (
         <div className="flex items-center justify-center h-64 text-gray-400 text-sm">데이터가 없습니다</div>
       ) : (
         <>

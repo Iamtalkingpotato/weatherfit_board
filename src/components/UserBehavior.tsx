@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Eye, Clock, Activity, ShoppingBag, Trophy } from 'lucide-react';
+import { Eye, Clock, Activity, ShoppingBag, Trophy, Calendar } from 'lucide-react';
 import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
 import {
   getBehaviorConversionRate,
@@ -92,24 +92,16 @@ type PopularPage    = { pageUrl: string; count: number };
 type WishlistConv   = { wishlistCount: number; purchaseCount: number; conversionRate: number };
 
 // ─── 날짜 필터 ───────────────────────────────────────────────────────────────
-const DAY_FILTERS: { label: string; days: number }[] = [
-  { label: '전체', days: 0  },
-  { label: '오늘', days: 1  },
-  { label: '7일',  days: 7  },
-  { label: '30일', days: 30 },
-];
+type PageRange = 'today' | '7d' | 'custom';
 
-const WISHLIST_DAY_FILTERS: { label: string; days: number }[] = [
-  { label: '오늘', days: 1  },
-  { label: '7일',  days: 7  },
-  { label: '30일', days: 30 },
-];
+function toLocalDateStr(d: Date): string {
+  return d.toLocaleDateString('sv-SE');
+}
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────────────────────
 export function UserBehavior() {
   const [loading,         setLoading]         = useState(true);
   const [detail,          setDetail]          = useState<DetailData | null>(null);
-  const [dayFilter,       setDayFilter]       = useState(0);
   const [summary,         setSummary]         = useState<Summary | null>(null);
   const [typeCounts,      setTypeCounts]      = useState<TypeCount[]>([]);
   const [hourlyData,      setHourlyData]      = useState<HourlyItem[]>([]);
@@ -125,47 +117,30 @@ export function UserBehavior() {
   const [popCategoryFilter, setPopCategoryFilter] = useState('전체');
   const [allPopularProducts, setAllPopularProducts] = useState<PopularProduct[]>([]);
 
-  // ── 찜 전환율 독립 필터 (기본 오늘, localStorage 유지) ──────────────────────────
-  const [wishlistDays, setWishlistDaysState] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('wf_wishlist_days');
-      return saved ? Number(saved) : 1;   // 기본값: 오늘(1)
-    } catch { return 1; }
-  });
-  const [wishlistCustom, setWishlistCustom] = useState<boolean>(() => {
-    try { return localStorage.getItem('wf_wishlist_custom') === '1'; } catch { return false; }
-  });
-  const [wishlistFromDate, setWishlistFromDateState] = useState<string>(() => {
-    try { return localStorage.getItem('wf_wishlist_from') ?? ''; } catch { return ''; }
-  });
-  const [wishlistIndepData, setWishlistIndepData] = useState<WishlistConv | null>(null);
-  const [wishlistLoading,   setWishlistLoading]   = useState(false);
+  // ── 페이지 단위 날짜 필터 ─────────────────────────────────────────────────────
+  const [rangeType, setRangeType] = useState<PageRange>('today');
+  const todayStr = toLocalDateStr(new Date());
+  const [customStart, setCustomStart] = useState(toLocalDateStr(new Date(Date.now() - 29 * 86400000)));
+  const [customEnd,   setCustomEnd]   = useState(todayStr);
 
-  /** 찜 필터 setter (localStorage 동기 저장) */
-  const setWishlistDays = (v: number) => {
-    setWishlistDaysState(v);
-    try { localStorage.setItem('wf_wishlist_days', String(v)); } catch {}
-  };
-  const setWishlistFromDate = (v: string) => {
-    setWishlistFromDateState(v);
-    try { localStorage.setItem('wf_wishlist_from', v); } catch {}
-  };
-  const setWishlistCustomAndSave = (v: boolean) => {
-    setWishlistCustom(v);
-    try { localStorage.setItem('wf_wishlist_custom', v ? '1' : '0'); } catch {}
-  };
+  const effectiveDays = useMemo(() => {
+    if (rangeType === 'today') return 1;
+    if (rangeType === '7d')    return 7;
+    if (customStart) return Math.max(1, Math.ceil((Date.now() - new Date(customStart).getTime()) / 86400000) + 1);
+    return 1;
+  }, [rangeType, customStart]);
 
-  // ── 8개 API 동시 호출 (dayFilter 변경 시 재호출) ─────────────────────────────
+  // ── API 동시 호출 (effectiveDays 변경 시 재호출) ────────────────────────────
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      getBehaviorSummary(dayFilter).catch(() => null),
-      getBehaviorTypeCounts(dayFilter).catch(() => []),
-      getBehaviorHourly(dayFilter).catch(() => []),
-      getBehaviorConversionRate(dayFilter).catch(() => null),
-      getBehaviorPopularProducts(dayFilter).catch(() => []),
-      getBehaviorPopularPages(dayFilter).catch(() => []),
-      getBehaviorWishlistConversion(dayFilter).catch(() => null),
+      getBehaviorSummary(effectiveDays).catch(() => null),
+      getBehaviorTypeCounts(effectiveDays).catch(() => []),
+      getBehaviorHourly(effectiveDays).catch(() => []),
+      getBehaviorConversionRate(effectiveDays).catch(() => null),
+      getBehaviorPopularProducts(effectiveDays).catch(() => []),
+      getBehaviorPopularPages(effectiveDays).catch(() => []),
+      getBehaviorWishlistConversion(effectiveDays).catch(() => null),
       getProducts().catch(() => []),
     ]).then(([sum, types, hourly, conv, popProds, popPages, wishConv, prods]) => {
       setSummary(sum ?? null);
@@ -198,7 +173,7 @@ export function UserBehavior() {
       setPopularPages(Array.isArray(popPages) ? popPages.slice(0, 5) : []);
       setWishlistConv(wishConv ?? null);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [dayFilter]);
+  }, [effectiveDays]);
 
   // ── 시간대별 활동 순위: 전날부터 30일 고정 ──────────────────────────────────
   useEffect(() => {
@@ -215,20 +190,6 @@ export function UserBehavior() {
     }).catch(() => {});
   }, []);
 
-  // ── 찜 전환율 독립 조회 ──────────────────────────────────────────────────────
-  useEffect(() => {
-    let days = wishlistDays;
-    if (wishlistCustom && wishlistFromDate) {
-      const diffMs = Date.now() - new Date(wishlistFromDate).getTime();
-      days = Math.max(1, Math.ceil(diffMs / 86400000));
-    }
-    setWishlistLoading(true);
-    getBehaviorWishlistConversion(days)
-      .then(d => setWishlistIndepData(d ?? null))
-      .catch(() => setWishlistIndepData(null))
-      .finally(() => setWishlistLoading(false));
-  }, [wishlistDays, wishlistCustom, wishlistFromDate]);
-
   // ── 상세 팝업 열기 ──────────────────────────────────────────────────────────
   const openDetail = async (
     eventType: string | null,
@@ -242,10 +203,10 @@ export function UserBehavior() {
     let allRows: any[] = Array.isArray(data) ? data : [];
     // 백엔드가 days=1을 "지난 24시간"으로 처리하므로, 오늘 버튼일 때 오늘 날짜만 필터링
     if (filterDays === 1) {
-      const todayPrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+      const todayPrefixDots = toLocalDateStr(new Date()).replace(/-/g, '.');
       allRows = allRows.filter(l => {
         const raw = String(l.time ?? l.createdAt ?? l.timestamp ?? '');
-        return raw.startsWith(todayPrefix);
+        return raw.startsWith(todayPrefixDots);
       });
     }
     // 최신순 정렬
@@ -255,7 +216,9 @@ export function UserBehavior() {
       return tb.localeCompare(ta);
     });
     const columns = getColumns(eventType);
-    setDetail({ title, subtitle, color, columns, rows: allRows.map(l => buildRow(l, columns)) });
+    // subtitle은 실제 조회된 건수로 덮어씀 (집계 API와 로그 API의 카운트 불일치 방지)
+    const actualSubtitle = `${allRows.length.toLocaleString()}건`;
+    setDetail({ title, subtitle: actualSubtitle, color, columns, rows: allRows.map(l => buildRow(l, columns)) });
   };
 
   // ── 퍼널 데이터 ─────────────────────────────────────────────────────────────
@@ -288,20 +251,48 @@ export function UserBehavior() {
           <h1 className="text-2xl font-semibold text-gray-900 mb-0.5">전체 고객 행동 분석</h1>
           <p className="text-gray-500 text-sm">고객의 웹사이트 내 행동 패턴</p>
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
-          {DAY_FILTERS.map(({ label, days }) => (
-            <button
-              key={days}
-              onClick={() => setDayFilter(days)}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                dayFilter === days
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+            {([
+              { key: 'today', label: '오늘' },
+              { key: '7d',   label: '7일'  },
+              { key: 'custom', label: '원하는 기간' },
+            ] as { key: PageRange; label: string }[]).map(btn => (
+              <button
+                key={btn.key}
+                onClick={() => setRangeType(btn.key)}
+                className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  rangeType === btn.key
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+          {rangeType === 'custom' && (
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm">
+              <Calendar size={13} className="text-gray-400 shrink-0" />
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd}
+                min={toLocalDateStr(new Date(new Date(customEnd).getTime() - 5 * 365 * 86400000))}
+                onChange={e => setCustomStart(e.target.value)}
+                className="text-xs border-none outline-none bg-transparent text-gray-700 cursor-pointer"
+              />
+              <span className="text-gray-300 text-xs">~</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={toLocalDateStr(new Date(new Date(customStart).getTime() + 5 * 365 * 86400000))}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="text-xs border-none outline-none bg-transparent text-gray-700 cursor-pointer"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -362,43 +353,38 @@ export function UserBehavior() {
           {/* ── 2행: 행동 타입별 분포(가로 막대) + 시간대별 활동 ─────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-            {/* 행동 타입별 분포 — 가로 막대 차트 */}
+            {/* 행동 타입별 분포 — 클릭 가능한 커스텀 리스트 */}
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-              <h2 className="text-base font-semibold text-gray-900 mb-4">행동 타입별 분포</h2>
+              <h2 className="text-base font-semibold text-gray-900 mb-3">행동 타입별 분포</h2>
               {activeTypes.length === 0 ? (
                 <div className="flex items-center justify-center h-60 text-gray-400 text-sm">데이터 없음</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={Math.max(240, activeTypes.length * 36)}>
-                  <BarChart
-                    data={activeTypes.map(t => ({
-                      name:  ACTION_LABEL[t.eventType] ?? t.eventType,
-                      count: t.count,
-                      type:  t.eventType,
-                    }))}
-                    layout="vertical"
-                    margin={{ left: 4, right: 24 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} />
-                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      formatter={(v: number) => [`${v.toLocaleString()}건`]}
-                      cursor={{ fill: '#f3f4f6' }}
-                    />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} cursor="pointer"
-                      onClick={(data: any) => openDetail(
-                        data.type,
-                        `${data.name} 행동 로그`,
-                        `총 ${data.count.toLocaleString()}건`,
-                        ACTION_COLORS[data.type] ?? DEFAULT_COLOR,
-                      )}>
-                      {activeTypes.map(t => (
-                        <Cell key={t.eventType} fill={ACTION_COLORS[t.eventType] ?? DEFAULT_COLOR} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+              ) : (() => {
+                const maxCount = Math.max(...activeTypes.map(t => t.count));
+                return (
+                  <div className="space-y-1 overflow-y-auto" style={{ maxHeight: Math.max(240, activeTypes.length * 34) }}>
+                    {activeTypes.map(t => {
+                      const label = ACTION_LABEL[t.eventType] ?? t.eventType;
+                      const color = ACTION_COLORS[t.eventType] ?? DEFAULT_COLOR;
+                      return (
+                        <div
+                          key={t.eventType}
+                          className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors group"
+                          onClick={() => openDetail(t.eventType, `${label} 행동 로그`, `총 ${t.count.toLocaleString()}건`, color)}
+                        >
+                          <span className="w-20 text-xs text-gray-600 text-right shrink-0 group-hover:text-gray-900">{label}</span>
+                          <div className="flex-1 bg-gray-100 rounded-sm h-5 relative overflow-hidden">
+                            <div
+                              className="h-5 rounded-sm transition-all"
+                              style={{ width: `${(t.count / maxCount) * 100}%`, backgroundColor: color }}
+                            />
+                          </div>
+                          <span className="w-14 text-xs text-gray-500 text-right shrink-0 group-hover:text-gray-800">{t.count.toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 시간대별 활동 */}
@@ -583,90 +569,33 @@ export function UserBehavior() {
               )}
             </div>
 
-            {/* 찜 전환율 — 독립 기간 필터 */}
+            {/* 찜 전환율 */}
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h2 className="text-base font-semibold text-gray-900">찜 전환율</h2>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {WISHLIST_DAY_FILTERS.map(({ label, days }) => (
-                    <button
-                      key={days}
-                      onClick={() => { setWishlistDays(days); setWishlistCustomAndSave(false); setWishlistFromDate(''); }}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        !wishlistCustom && wishlistDays === days
-                          ? 'bg-pink-500 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setWishlistCustomAndSave(!wishlistCustom)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                      wishlistCustom
-                        ? 'bg-pink-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    직접입력
-                  </button>
-                </div>
-              </div>
-
-              {wishlistCustom && (
-                <div className="flex items-center gap-2 mb-3 text-xs text-gray-600">
-                  <span className="shrink-0">시작일</span>
-                  <input
-                    type="date"
-                    value={wishlistFromDate}
-                    max={new Date(Date.now() - 86400000).toISOString().slice(0, 10)}
-                    onChange={e => setWishlistFromDate(e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400"
-                  />
-                  <span className="text-gray-400">~ 오늘</span>
-                  {wishlistFromDate && (
-                    <span className="text-pink-500 font-medium">
-                      ({Math.max(1, Math.ceil((Date.now() - new Date(wishlistFromDate).getTime()) / 86400000))}일간)
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {wishlistLoading ? (
+              <h2 className="text-base font-semibold text-gray-900 mb-4">찜 전환율</h2>
+              {loading ? (
                 <div className="flex items-center justify-center h-28 text-gray-400 text-sm">불러오는 중...</div>
-              ) : !wishlistIndepData ? (
+              ) : !wishlistConv ? (
                 <div className="flex items-center justify-center h-28 text-gray-400 text-sm">데이터 없음</div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     {
                       label: '찜 추가 수',
-                      value: wishlistIndepData.wishlistCount.toLocaleString(),
+                      value: wishlistConv.wishlistCount.toLocaleString(),
                       cls: 'bg-pink-50 border-pink-200 text-pink-700',
                       clickable: true,
-                      onClick: () => {
-                        const days = wishlistCustom && wishlistFromDate
-                          ? Math.max(1, Math.ceil((Date.now() - new Date(wishlistFromDate).getTime()) / 86400000))
-                          : wishlistDays;
-                        openDetail('wishlist_add', '찜 추가 로그', `${wishlistIndepData.wishlistCount.toLocaleString()}건`, '#ec4899', undefined, days);
-                      },
+                      onClick: () => openDetail('wishlist_add', '찜 추가 로그', `${wishlistConv.wishlistCount.toLocaleString()}건`, '#ec4899', undefined, effectiveDays),
                     },
                     {
                       label: '구매 전환 수',
-                      value: wishlistIndepData.purchaseCount.toLocaleString(),
+                      value: wishlistConv.purchaseCount.toLocaleString(),
                       cls: 'bg-green-50 border-green-200 text-green-700',
                       clickable: true,
-                      onClick: () => {
-                        const days = wishlistCustom && wishlistFromDate
-                          ? Math.max(1, Math.ceil((Date.now() - new Date(wishlistFromDate).getTime()) / 86400000))
-                          : wishlistDays;
-                        openDetail('purchase', '구매 전환 로그', `${wishlistIndepData.purchaseCount.toLocaleString()}건`, '#10b981', undefined, days);
-                      },
+                      onClick: () => openDetail('purchase', '구매 전환 로그', `${wishlistConv.purchaseCount.toLocaleString()}건`, '#10b981', undefined, effectiveDays),
                     },
                     {
                       label: '전환율',
-                      value: wishlistIndepData.conversionRate === 0 ? '-' : `${wishlistIndepData.conversionRate}%`,
+                      value: wishlistConv.conversionRate === 0 ? '-' : `${wishlistConv.conversionRate}%`,
                       cls: 'bg-purple-50 border-purple-200 text-purple-700',
                       clickable: false,
                       onClick: undefined,
