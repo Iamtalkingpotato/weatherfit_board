@@ -297,13 +297,20 @@ function CouponForm({
           </select>
         </div>
 
-        {/* 연결 캠페인 (읽기 전용 — 캠페인 페이지에서 연결 설정) */}
-        <div className="flex items-center gap-3">
-          <label className="w-32 text-sm text-gray-600 shrink-0">연결 캠페인</label>
-          <div className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-gray-50 text-gray-700 min-w-[180px]">
-            {form.campaignId
-              ? campaigns.find(c => String(c.id) === String(form.campaignId))?.campaignName ?? `캠페인 #${form.campaignId}`
-              : <span className="text-gray-400">없음 (캠페인에서 설정)</span>
+        {/* 연결 캠페인 (읽기 전용 — 캠페인 페이지에서만 설정) */}
+        <div className="flex items-start gap-3">
+          <label className="w-32 text-sm text-gray-600 shrink-0 pt-1.5">연결 캠페인</label>
+          <div className="flex flex-wrap gap-1.5 min-w-[180px]">
+            {(initial?.linkedCampaignIds ?? []).length > 0
+              ? (initial!.linkedCampaignIds!).map(cid => {
+                  const name = campaigns.find(c => c.id === cid)?.campaignName;
+                  return (
+                    <span key={cid} className="px-2.5 py-1 text-xs rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-medium">
+                      {name ?? `#${cid}`}
+                    </span>
+                  );
+                })
+              : <span className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-gray-50 text-gray-400">없음 (캠페인에서 설정)</span>
             }
           </div>
         </div>
@@ -460,6 +467,10 @@ export function CouponPage() {
   if (view === 'issued' && selectedCoupon) {
     const custMap = Object.fromEntries(customers.map(c => [String(c.id), c.name ?? c.email ?? String(c.id)]));
     const issuedForCoupon = ccList.filter(cc => cc.couponId === selectedCoupon.id);
+    const issuedUsed    = issuedForCoupon.filter(cc => cc.status === 'USED').length;
+    const issuedTotal   = issuedForCoupon.length;
+    const issuedRate    = issuedTotal > 0 ? Math.round((issuedUsed / issuedTotal) * 100) : 0;
+
     const searchLower = issuedSearch.trim().toLowerCase();
     const filteredIssued = searchLower
       ? issuedForCoupon.filter(cc => {
@@ -482,11 +493,28 @@ export function CouponPage() {
             </p>
           </div>
           <button
-            onClick={() => setView('list')}
+            onClick={() => navigate('/coupon')}
             className="ml-auto flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
           >
             ← 목록으로
           </button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {[
+            { label: '발급 건수',    value: `${issuedTotal}건`,  color: 'bg-blue-500' },
+            { label: '사용 완료',    value: `${issuedUsed}건`,   color: 'bg-green-500' },
+            { label: '사용률',       value: `${issuedRate}%`,    color: 'bg-purple-500' },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`${s.color} w-2.5 h-2.5 rounded-full`} />
+                <p className="text-sm text-gray-500">{s.label}</p>
+              </div>
+              <p className="text-2xl font-semibold text-gray-900">{s.value}</p>
+            </div>
+          ))}
         </div>
 
         {/* 검색 */}
