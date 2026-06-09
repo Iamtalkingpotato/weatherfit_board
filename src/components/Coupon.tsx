@@ -380,6 +380,17 @@ export function CouponPage() {
     [ccList]
   );
 
+  // ccList 기준으로 쿠폰별 실제 발급/사용 건수 집계
+  const couponStats = useMemo(() => {
+    const map: Record<number, { issued: number; used: number }> = {};
+    for (const cc of ccList) {
+      if (!map[cc.couponId]) map[cc.couponId] = { issued: 0, used: 0 };
+      map[cc.couponId].issued += 1;
+      if (cc.status === 'USED') map[cc.couponId].used += 1;
+    }
+    return map;
+  }, [ccList]);
+
   // Stats — ccList 실제 데이터 기준
   const activeCoupons = list.filter(c => c.status === 'ACTIVE').length;
   const totalIssued = ccList.length;
@@ -512,13 +523,23 @@ export function CouponPage() {
           },
           { label: '평균 사용률', value: `${avgUsageRate}%`, sub: '발급 대비 사용', color: 'bg-purple-500', accentColor: '#8b5cf6',
             onClick: () => {
-              const rows = list.filter(c => c.issuedCount > 0).sort((a,b) => (b.usedCount/b.issuedCount) - (a.usedCount/a.issuedCount)).map(c => ({
-                '쿠폰명': c.couponName,
-                '발급수': `${c.issuedCount}건`,
-                '사용수': `${c.usedCount}건`,
-                '사용률': `${Math.round((c.usedCount/c.issuedCount)*100)}%`,
-                '상태': COUPON_STATUS_LABEL[c.status] ?? c.status,
-              }));
+              const rows = list
+                .filter(c => (couponStats[c.id]?.issued ?? 0) > 0)
+                .sort((a, b) => {
+                  const ra = (couponStats[a.id]?.used ?? 0) / (couponStats[a.id]?.issued ?? 1);
+                  const rb = (couponStats[b.id]?.used ?? 0) / (couponStats[b.id]?.issued ?? 1);
+                  return rb - ra;
+                })
+                .map(c => {
+                  const s = couponStats[c.id] ?? { issued: 0, used: 0 };
+                  return {
+                    '쿠폰명': c.couponName,
+                    '발급수': `${s.issued}건`,
+                    '사용수': `${s.used}건`,
+                    '사용률': `${Math.round((s.used / s.issued) * 100)}%`,
+                    '상태': COUPON_STATUS_LABEL[c.status] ?? c.status,
+                  };
+                });
               setDetail({ title: '쿠폰별 사용률', subtitle: `평균 ${avgUsageRate}%`, color: '#8b5cf6', columns: ['쿠폰명', '발급수', '사용수', '사용률', '상태'], rows });
             }
           },
@@ -554,8 +575,21 @@ export function CouponPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {['No', '쿠폰 ID', '쿠폰명', '유형', '할인값', '최소주문', '적용범위', '유효기간', '연결 캠페인', '발급/사용', '상태', ''].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
+                  {([
+                    ['No',        'text-center'],
+                    ['쿠폰 ID',   'text-center'],
+                    ['쿠폰명',    'text-left'],
+                    ['유형',      'text-left'],
+                    ['할인값',    'text-right'],
+                    ['최소주문',  'text-right'],
+                    ['적용범위',  'text-left'],
+                    ['유효기간',  'text-right'],
+                    ['연결 캠페인', 'text-left'],
+                    ['발급/사용', 'text-right'],
+                    ['상태',      'text-center'],
+                    ['',          'text-left'],
+                  ] as [string, string][]).map(([h, align]) => (
+                    <th key={h} className={`px-3 py-2.5 ${align} text-xs font-medium text-gray-500 whitespace-nowrap`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -565,7 +599,8 @@ export function CouponPage() {
                 ) : (
                   list.slice((couponPage - 1) * PAGE_SIZE, couponPage * PAGE_SIZE).map((c, i) => {
                     const linkedCampaign = c.campaignId != null ? campaigns.find(cam => cam.id === c.campaignId) : null;
-                    const usageRate = c.issuedCount > 0 ? Math.round((c.usedCount / c.issuedCount) * 100) : 0;
+                    const stats = couponStats[c.id] ?? { issued: 0, used: 0 };
+                    const usageRate = stats.issued > 0 ? Math.round((stats.used / stats.issued) * 100) : 0;
                     return (
                       <tr
                         key={c.id}
@@ -573,25 +608,25 @@ export function CouponPage() {
                         onClick={() => handleEdit(c)}
                       >
                         <td className="px-3 py-3 text-center text-gray-500 text-xs">{i + 1}</td>
-                        <td className="px-3 py-3 text-xs font-mono text-gray-700 whitespace-nowrap">{c.id}</td>
+                        <td className="px-3 py-3 text-center text-xs font-mono text-gray-700 whitespace-nowrap">{c.id}</td>
                         <td className="px-3 py-3 text-sm text-gray-900 max-w-[180px] truncate">{c.couponName}</td>
                         <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{COUPON_TYPE_LABEL[c.type]}</td>
-                        <td className="px-3 py-3 text-xs text-gray-800 whitespace-nowrap font-medium">
+                        <td className="px-3 py-3 text-right text-xs text-gray-800 whitespace-nowrap font-medium">
                           {c.type === 'PERCENT' ? `${c.discountValue}%` : `${c.discountValue.toLocaleString()}원`}
                         </td>
-                        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
+                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">
                           {c.minOrderAmount > 0 ? `${c.minOrderAmount.toLocaleString()}원` : '-'}
                         </td>
                         <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
                           {c.targetCategory ? (CATEGORY_LABEL[c.targetCategory] ?? c.targetCategory) : '전체'}
                         </td>
-                        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{c.validDays}일</td>
+                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{c.validDays}일</td>
                         <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
                           {linkedCampaign ? linkedCampaign.campaignName : '-'}
                         </td>
-                        <td className="px-3 py-3 text-xs text-gray-700 whitespace-nowrap">
-                          {c.issuedCount}건 / {c.usedCount}건
-                          {c.issuedCount > 0 && (
+                        <td className="px-3 py-3 text-right text-xs text-gray-700 whitespace-nowrap">
+                          {stats.issued}건 / {stats.used}건
+                          {stats.issued > 0 && (
                             <span className="ml-1 text-gray-400">({usageRate}%)</span>
                           )}
                         </td>
@@ -652,8 +687,16 @@ export function CouponPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {['No', '고객명', '쿠폰명', '발급일', '만료일', '사용일', '상태'].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
+                  {([
+                    ['No',    'text-center'],
+                    ['고객명', 'text-left'],
+                    ['쿠폰명', 'text-left'],
+                    ['발급일', 'text-right'],
+                    ['만료일', 'text-right'],
+                    ['사용일', 'text-right'],
+                    ['상태',  'text-center'],
+                  ] as [string, string][]).map(([h, align]) => (
+                    <th key={h} className={`px-3 py-2.5 ${align} text-xs font-medium text-gray-500 whitespace-nowrap`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -669,9 +712,9 @@ export function CouponPage() {
                         <td className="px-3 py-3 text-center text-gray-500 text-xs">{(issuedPage - 1) * PAGE_SIZE + i + 1}</td>
                         <td className="px-3 py-3 text-sm text-gray-900">{customer?.name ?? cc.customerId}</td>
                         <td className="px-3 py-3 text-xs text-gray-700 max-w-[180px] truncate">{coupon?.couponName ?? cc.couponId}</td>
-                        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.issuedAt)}</td>
-                        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.expiredAt)}</td>
-                        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.usedAt)}</td>
+                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.issuedAt)}</td>
+                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.expiredAt)}</td>
+                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.usedAt)}</td>
                         <td className="px-3 py-3 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CUSTOMER_COUPON_BADGE[cc.status]}`}>
                             {CUSTOMER_COUPON_STATUS_LABEL[cc.status]}

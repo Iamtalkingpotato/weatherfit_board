@@ -10,7 +10,6 @@ export interface CustomerFieldDef {
 export const AVAILABLE_CUSTOMER_FIELDS: CustomerFieldDef[] = [
   { id: 'gender',           label: '성별',            dataType: 'select' },
   { id: 'birthDate',        label: '생년월일',        dataType: 'date'   },
-  { id: 'regionId',         label: '지역 ID',         dataType: 'number' },
   { id: 'joinDate',         label: '가입일',          dataType: 'date'   },
   { id: 'membershipLevel',  label: '멤버십 등급',      dataType: 'select' },
   { id: 'coldSensitivity',  label: '추위 민감도',      dataType: 'number' },
@@ -21,7 +20,6 @@ export const AVAILABLE_CUSTOMER_FIELDS: CustomerFieldDef[] = [
   { id: 'emailConsent',     label: '이메일 수신 동의', dataType: 'select' },
   { id: 'smsConsent',       label: 'SMS 수신 동의',    dataType: 'select' },
   { id: 'lastLoginDate',    label: '최근 로그인일',    dataType: 'date'   },
-  { id: 'regionCity',       label: '지역(시)',         dataType: 'string' },
   { id: 'dormantDays',      label: '휴면 일수',        dataType: 'number' },
   { id: 'feedbackCount',    label: '총 피드백 수',     dataType: 'number' },
   { id: 'coldFeedbackCount', label: '"춥다" 피드백 수', dataType: 'number' },

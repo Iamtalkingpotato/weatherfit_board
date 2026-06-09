@@ -193,17 +193,30 @@ export function ChartDetailPanel({
               <table className="w-full text-sm border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    <th className="bg-gray-50 border-b border-gray-100 px-4 py-3 text-left text-[11px] font-semibold text-gray-400 w-10 select-none">
+                    <th className="bg-gray-50 border-b border-gray-100 px-4 py-3 text-center text-[11px] font-semibold text-gray-400 w-10 select-none">
                       No
                     </th>
-                    {data.columns.map(col => (
-                      <th
-                        key={col}
-                        className="bg-gray-50 border-b border-gray-100 px-4 py-3 text-left text-[11px] font-semibold text-gray-500 whitespace-nowrap select-none"
-                      >
-                        {col}
-                      </th>
-                    ))}
+                    {data.columns.map(col => {
+                      const sample = data.rows.find(r => r[col] != null && String(r[col]) !== '-')?.[col];
+                      const isRight = sample != null && (
+                        (typeof sample === 'string' && (
+                          sample.startsWith('₩') ||
+                          sample.endsWith('°C') ||
+                          sample.endsWith('%') ||
+                          /^[\d,]+(건|원|일|회)$/.test(sample) ||
+                          /^\d{2}-\d{2}-\d{2}/.test(sample)
+                        )) ||
+                        typeof sample === 'number'
+                      );
+                      return (
+                        <th
+                          key={col}
+                          className={`bg-gray-50 border-b border-gray-100 px-4 py-3 ${isRight ? 'text-right' : 'text-left'} text-[11px] font-semibold text-gray-500 whitespace-nowrap select-none`}
+                        >
+                          {col}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -213,23 +226,29 @@ export function ChartDetailPanel({
                       className="border-b border-gray-50 transition-colors hover:bg-blue-50/30"
                       style={i % 2 === 1 ? { backgroundColor: '#f9fafb' } : {}}
                     >
-                      <td className="px-4 py-2.5 text-[11px] text-gray-300 font-mono tabular-nums select-none">
+                      <td className="px-4 py-2.5 text-center text-[11px] text-gray-300 font-mono tabular-nums select-none">
                         {i + 1}
                       </td>
                       {data.columns.map(col => {
                         const val = row[col];
-                        const isAmt  = typeof val === 'string' && val.startsWith('₩');
-                        const isTemp = typeof val === 'string' && val.endsWith('°C');
-                        const str    = String(val ?? '');
-                        const q      = query.trim().toLowerCase();
-                        const idx    = q ? str.toLowerCase().indexOf(q) : -1;
+                        const isAmt   = typeof val === 'string' && val.startsWith('₩');
+                        const isTemp  = typeof val === 'string' && val.endsWith('°C');
+                        const isPct   = typeof val === 'string' && val.endsWith('%');
+                        const isDate  = typeof val === 'string' && /^\d{2}-\d{2}-\d{2}/.test(val);
+                        const isCount = typeof val === 'string' && /^[\d,]+(건|원|일|회)$/.test(val);
+                        const isNum   = typeof val === 'number';
+                        const isRight = isAmt || isTemp || isPct || isDate || isCount || isNum;
+                        const str     = String(val ?? '');
+                        const q       = query.trim().toLowerCase();
+                        const idx     = q ? str.toLowerCase().indexOf(q) : -1;
 
                         return (
                           <td
                             key={col}
                             className={`px-4 py-2.5 text-xs whitespace-nowrap ${
-                              isAmt  ? 'font-semibold text-gray-800' :
-                              isTemp ? 'text-blue-600 font-medium' :
+                              isAmt   ? 'text-right font-semibold text-gray-800' :
+                              isTemp  ? 'text-right text-blue-600 font-medium' :
+                              isRight ? 'text-right text-gray-700' :
                               'text-gray-700'
                             }`}
                           >

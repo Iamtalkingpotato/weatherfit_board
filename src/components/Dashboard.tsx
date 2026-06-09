@@ -357,7 +357,7 @@ export function Dashboard() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b border-gray-100">
-              <th className="pb-2.5 pr-6 font-medium text-gray-500 whitespace-nowrap">처리시각</th>
+              <th className="pb-2.5 pr-6 text-right font-medium text-gray-500 whitespace-nowrap">처리시각</th>
               <th className="pb-2.5 pr-6 font-medium text-gray-500 whitespace-nowrap">토픽</th>
               <th className="pb-2.5 font-medium text-gray-500">메시지</th>
             </tr>
@@ -365,7 +365,7 @@ export function Dashboard() {
           <tbody>
             {successLogs.slice(0, 5).map((log, i) => (
               <tr key={i} className="border-b border-gray-50 last:border-0">
-                <td className="py-2.5 pr-6 text-gray-500 whitespace-nowrap">{formatDate(log.processedAt)}</td>
+                <td className="py-2.5 pr-6 text-right text-gray-500 whitespace-nowrap">{formatDate(log.processedAt)}</td>
                 <td className="py-2.5 pr-6 text-gray-700 whitespace-nowrap">{log.topic}</td>
                 <td className="py-2.5 text-gray-600">
                   {log.rawMessage?.length > 50 ? `${log.rawMessage.slice(0, 50)}…` : log.rawMessage}

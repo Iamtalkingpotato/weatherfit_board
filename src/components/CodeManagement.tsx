@@ -474,8 +474,17 @@ export function CodeManagement() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['#', '필드 ID', '표시명', '타입', '필터 주제', '옵션', '캠페인 필터 활성', '관리'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                {([
+                  ['#',           'text-center'],
+                  ['필드 ID',     'text-center'],
+                  ['표시명',      'text-left'],
+                  ['타입',        'text-center'],
+                  ['필터 주제',   'text-left'],
+                  ['옵션',        'text-left'],
+                  ['캠페인 필터 활성', 'text-center'],
+                  ['관리',        'text-center'],
+                ] as [string, string][]).map(([h, align]) => (
+                  <th key={h} className={`px-4 py-3 ${align} text-xs font-semibold text-gray-500 whitespace-nowrap`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -506,7 +515,7 @@ export function CodeManagement() {
                         </td>
 
                         {/* 필드 ID */}
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{field.id}</td>
+                        <td className="px-4 py-3 text-center font-mono text-xs text-gray-600">{field.id}</td>
 
                         {/* 표시명 */}
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{field.label}</td>
@@ -611,15 +620,20 @@ export function CodeManagement() {
                                 <table className="w-full text-xs">
                                   <thead className="bg-gray-50 border-b border-purple-100">
                                     <tr>
-                                      {['코드값', '코드명(한글)', '코드명(영문)', '관리'].map(h => (
-                                        <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                                      {([
+                                        ['코드값',      'text-center'],
+                                        ['코드명(한글)', 'text-left'],
+                                        ['코드명(영문)', 'text-left'],
+                                        ['관리',        'text-center'],
+                                      ] as [string, string][]).map(([h, align]) => (
+                                        <th key={h} className={`px-4 py-2 ${align} text-xs font-semibold text-gray-500 whitespace-nowrap`}>{h}</th>
                                       ))}
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-purple-100">
                                     {opts.map(opt => (
                                       <tr key={opt.codeValue} className="hover:bg-purple-50/50 transition-colors">
-                                        <td className="px-4 py-2">
+                                        <td className="px-4 py-2 text-center">
                                           <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-semibold">
                                             {opt.codeValue}
                                           </span>

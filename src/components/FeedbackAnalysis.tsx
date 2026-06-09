@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { getAllFeedbacks, getCustomers } from '../api/logApi';
+import { getAllFeedbacks, getCustomers, getRegions } from '../api/logApi';
 
 interface TemperatureFeedback {
   id?: number;
@@ -20,7 +20,7 @@ const WEATHER_LABEL: Record<string, string> = {
   RAIN: '비', SNOW: '눈', FOG: '안개', WIND: '바람', THUNDER: '천둥번개',
   SLEET: '진눈깨비', HAIL: '우박', DUST: '황사', SMOKE: '연기',
 };
-import { TrendingUp, TrendingDown, Minus, Search, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Search, Activity, RefreshCw } from 'lucide-react';
 import { ChartDetailPanel, DetailData } from './ChartDetailPanel';
 
 const fbDate = (f: any): string => f.feedbackDate ?? f.createdAt ?? '';
@@ -29,18 +29,22 @@ export function FeedbackAnalysis() {
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [feedbacks, setFeedbacks] = useState<TemperatureFeedback[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [regions, setRegions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tableSearch, setTableSearch] = useState('');
 
-  useEffect(() => {
-    Promise.all([
-      getAllFeedbacks().catch(() => []),
-      getCustomers().catch(() => []),
-    ]).then(([fbs, custs]) => {
+  const load = () => {
+    setLoading(true);
+    Promise.all([getAllFeedbacks(), getCustomers(), getRegions()]).then(([fbs, custs, regs]) => {
       setFeedbacks(Array.isArray(fbs) ? fbs : []);
       setCustomers(Array.isArray(custs) ? custs : []);
+      setRegions(Array.isArray(regs) ? regs : []);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    });
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   const total   = feedbacks.length;
@@ -108,9 +112,19 @@ export function FeedbackAnalysis() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900 mb-1">온도 피드백 분석</h1>
-        <p className="text-gray-500 text-sm">고객이 느끼는 체감 온도 분석</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-gray-900 mb-1">온도 피드백 분석</h1>
+          <p className="text-gray-500 text-sm">고객이 느끼는 체감 온도 분석</p>
+        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          새로고침
+        </button>
       </div>
 
       {loading ? (
@@ -149,7 +163,14 @@ export function FeedbackAnalysis() {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={cityData} margin={{ left: 0, right: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="city" tick={{ fontSize: 11 }} interval={0} />
+                  <XAxis
+                    dataKey="city"
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    tickFormatter={(value: string) =>
+                      value.replace('특별자치도', '').replace('특별자치시', '').replace('광역시', '').replace('특별시', '')
+                    }
+                  />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip cursor={{ fill: 'transparent' }} />
                   <Legend />
@@ -235,8 +256,16 @@ export function FeedbackAnalysis() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 text-gray-600">
-                    {['날짜','고객','지역','실제온도','습도','날씨','피드백'].map(h => (
-                      <th key={h} className="text-left py-3 px-3 font-medium">{h}</th>
+                    {([
+                      ['날짜',    'text-right'],
+                      ['고객',    'text-left'],
+                      ['지역',    'text-left'],
+                      ['실제온도', 'text-right'],
+                      ['습도',    'text-right'],
+                      ['날씨',    'text-left'],
+                      ['피드백',  'text-center'],
+                    ] as [string, string][]).map(([h, align]) => (
+                      <th key={h} className={`${align} py-3 px-3 font-medium`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -245,13 +274,13 @@ export function FeedbackAnalysis() {
                     const fbLabel = FEEDBACK_LABEL[f.feedback] ?? f.feedback;
                     return (
                       <tr key={f.id ?? i} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-2.5 px-3">{fbDate(f) || '-'}</td>
+                        <td className="py-2.5 px-3 text-right">{fbDate(f) || '-'}</td>
                         <td className="py-2.5 px-3 font-medium">{custMap[String(f.customerId)] ?? '-'}</td>
                         <td className="py-2.5 px-3 text-gray-500">{f.regionName ?? '-'}</td>
-                        <td className="py-2.5 px-3">{f.temperature != null ? `${f.temperature}°C` : '-'}</td>
-                        <td className="py-2.5 px-3 text-gray-500">{f.humidity != null ? `${f.humidity}%` : '-'}</td>
+                        <td className="py-2.5 px-3 text-right">{f.temperature != null ? `${f.temperature}°C` : '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-gray-500">{f.humidity != null ? `${f.humidity}%` : '-'}</td>
                         <td className="py-2.5 px-3 text-gray-500">{WEATHER_LABEL[f.weatherCondition] ?? f.weatherCondition ?? '-'}</td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-xs ${f.feedback === 'PERFECT' ? 'bg-green-100 text-green-800' : f.feedback === 'HOT' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
                             {fbLabel}
                           </span>

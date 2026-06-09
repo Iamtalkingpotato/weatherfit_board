@@ -31,12 +31,12 @@ const fmtDate = (raw: string | null | undefined): string => {
     return `${yy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   } catch { return raw; }
 };
-const pDate = (p: any): string => fmtDate(p.purchasedAt ?? p.purchaseDate);
+const pDate = (p: any): string => fmtDate(p.purchasedAt ?? p.purchaseDate ?? p.createdAt);
 
 /** 최신순 정렬 헬퍼 */
 const byDateDesc = (a: any, b: any): number => {
-  const ra = a.purchasedAt ?? a.purchaseDate ?? '';
-  const rb = b.purchasedAt ?? b.purchaseDate ?? '';
+  const ra = a.purchasedAt ?? a.purchaseDate ?? a.createdAt ?? '';
+  const rb = b.purchasedAt ?? b.purchaseDate ?? b.createdAt ?? '';
   const da = ra ? parseDate(ra).getTime() : 0;
   const db = rb ? parseDate(rb).getTime() : 0;
   return db - da;
@@ -144,9 +144,9 @@ export function PurchaseAnalysis() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[
-              { label: STATUS_LABEL['PURCHASED'], value:`${purchased.length}건`, sub:`전환율 ${allPurchases.length ? ((purchased.length/allPurchases.length)*100).toFixed(1) : 0}%`, icon: ShoppingBag, color:'bg-green-500', statusKey:'PURCHASED', accentColor:'#10b981' },
-              { label: STATUS_LABEL['WISHLIST'],  value:`${wishlist.length}건`,  sub:`비율 ${allPurchases.length ? ((wishlist.length/allPurchases.length)*100).toFixed(1) : 0}%`,   icon: Heart,        color:'bg-pink-500',  statusKey:'WISHLIST',  accentColor:'#f59e0b' },
-              { label: STATUS_LABEL['CART'],      value:`${cart.length}건`,      sub:`비율 ${allPurchases.length ? ((cart.length/allPurchases.length)*100).toFixed(1) : 0}%`,       icon: ShoppingCart, color:'bg-blue-500',  statusKey:'CART',      accentColor:'#3b82f6' },
+              { label: STATUS_LABEL['PURCHASED'], value:`${purchased.length}건`, sub:`장바구니 전환율 ${(purchased.length + cart.length) ? ((purchased.length/(purchased.length + cart.length))*100).toFixed(1) : 0}%`, icon: ShoppingBag, color:'bg-green-500', statusKey:'PURCHASED', accentColor:'#10b981' },
+              { label: STATUS_LABEL['WISHLIST'],  value:`${wishlist.length}건`,  sub:`행동 전환율 ${allPurchases.length ? (((cart.length + purchased.length)/allPurchases.length)*100).toFixed(1) : 0}%`,                             icon: Heart,        color:'bg-pink-500',  statusKey:'WISHLIST',  accentColor:'#f59e0b' },
+              { label: STATUS_LABEL['CART'],      value:`${cart.length}건`,      sub:`이탈률 ${(purchased.length + cart.length) ? ((cart.length/(purchased.length + cart.length))*100).toFixed(1) : 0}%`,                               icon: ShoppingCart, color:'bg-blue-500',  statusKey:'CART',      accentColor:'#3b82f6' },
             ].map(m => {
               const Icon = m.icon;
               return (
@@ -209,10 +209,10 @@ export function PurchaseAnalysis() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">구매 상태 분포</h2>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart margin={{ top: 24, right: 48, bottom: 24, left: 48 }}>
                   <Pie data={statusData} cx="50%" cy="50%" outerRadius={80} dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
+                    label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={true}>
                     {statusData.map(e => (
                       <Cell key={e.name} fill={e.color} cursor="pointer" style={{ outline: 'none' }}
                         onClick={() => {

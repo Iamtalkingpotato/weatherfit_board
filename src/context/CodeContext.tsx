@@ -57,7 +57,6 @@ export const INITIAL_FIELDS: Field[] = [
     ],
   },
   { fieldNo: 2,  id: 'birthDate',    label: '생년월일',   dataType: 'date',   active: true, filterSubject: '고객정보' },
-  { fieldNo: 3,  id: 'regionId',     label: '지역 ID',    dataType: 'number', active: true, filterSubject: '고객정보' },
   { fieldNo: 4,  id: 'joinDate',     label: '가입일',      dataType: 'date',   active: true, filterSubject: '고객정보' },
   {
     fieldNo: 5, id: 'membershipLevel', label: '멤버십 등급', dataType: 'select', active: true, filterSubject: '고객정보',
@@ -125,7 +124,6 @@ export const INITIAL_FIELDS: Field[] = [
     ],
   },
   { fieldNo: 13, id: 'lastLoginDate',       label: '최근 로그인일',   dataType: 'date',   active: true, filterSubject: '고객정보' },
-  { fieldNo: 14, id: 'regionCity',          label: '지역(시)',         dataType: 'string', active: true, filterSubject: '고객정보' },
   { fieldNo: 15, id: 'dormantDays',         label: '휴면 일수',       dataType: 'number', active: true, filterSubject: '고객정보' },
   { fieldNo: 16, id: 'feedbackCount',       label: '총 피드백 수',    dataType: 'number', active: true, filterSubject: '피드백',   isAggregate: true },
   { fieldNo: 17, id: 'coldFeedbackCount',   label: '"춥다" 피드백 수', dataType: 'number', active: true, filterSubject: '피드백',   isAggregate: true },
@@ -144,7 +142,7 @@ export const INITIAL_FIELDS: Field[] = [
 const LS_FIELDS_KEY          = 'wf_admin_fields';
 const LS_FIELDS_VERSION_KEY  = 'wf_admin_fields_version';
 const LS_SUBJECTS_KEY        = 'wf_admin_filter_subjects';
-const CURRENT_FIELDS_VERSION = '7';
+const CURRENT_FIELDS_VERSION = '8';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 

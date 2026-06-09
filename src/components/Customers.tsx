@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { Search, User, Mail, Calendar, Award, Phone, TrendingUp, MessageSquare } from 'lucide-react';
-import { getCustomers, getCustomerPurchases, getCustomerPreferences, getColors, getRegions, getProducts, getCustomerCoupons, getCoupons } from '../api/logApi';
+import { getCustomers, getCustomerPurchases, getCustomerPreferences, getColors, getProducts, getCustomerCoupons, getCoupons } from '../api/logApi';
 
 // ─── Label constants ───────────────────────────────────────────────────────────
 const GENDER_LABEL: Record<string, string> = { MALE: '남성', FEMALE: '여성' };
@@ -77,13 +77,11 @@ export function Customers() {
   const [preferences, setPreferences] = useState<any>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [allCoupons, setAllCoupons] = useState<any[]>([]);
-  const [regions, setRegions] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [colors, setColors] = useState<any[]>([]);
 
   useEffect(() => {
     getCustomers().then(data => setCustomers(Array.isArray(data) ? data : [])).catch(() => setCustomers([]));
-    getRegions().then(data => setRegions(Array.isArray(data) ? data : [])).catch(() => setRegions([]));
     getProducts().then(data => setProducts(Array.isArray(data) ? data : [])).catch(() => setProducts([]));
     getColors().then(data => setColors(Array.isArray(data) ? data : [])).catch(() => setColors([]));
     getCoupons().then(data => setAllCoupons(Array.isArray(data) ? data : [])).catch(() => setAllCoupons([]));
@@ -108,9 +106,7 @@ export function Customers() {
   useEffect(() => { setItemSearch(''); }, [tab, selectedId]);
 
   const filtered = customers.filter(c => {
-    const region = regions.find(r => r.id === c.regionId);
-    const fullName = region ? `${region.city} ${region.district}` : '';
-    const matchSearch = (c.name ?? '').includes(search) || (c.email ?? '').includes(search) || fullName.includes(search);
+    const matchSearch = (c.name ?? '').includes(search) || (c.email ?? '').includes(search);
     const matchGender = filterGender === '전체' || GENDER_LABEL[c.gender] === filterGender;
     return matchSearch && matchGender;
   });
@@ -183,7 +179,7 @@ export function Customers() {
           <div className="p-3 border-b border-gray-100">
             <div className="relative mb-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-              <input type="text" placeholder="이름, 이메일, 지역 검색..." value={search}
+              <input type="text" placeholder="이름, 이메일 검색..." value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
@@ -244,16 +240,18 @@ export function Customers() {
                 {tab === '기본' && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2.5">
-                      {[
-                        { icon: User,     color: 'bg-blue-100 text-blue-600',     label: '이름',     value: selected.name,                                                              span: 1 },
-                        { icon: Mail,     color: 'bg-green-100 text-green-600',   label: '이메일',   value: selected.email,                                                             span: 1 },
-                        { icon: Phone,    color: 'bg-purple-100 text-purple-600', label: '전화번호', value: selected.phone ?? '-',                                                      span: 1 },
-                        { icon: Calendar, color: 'bg-orange-100 text-orange-600', label: '생년월일', value: selected.birthDate ?? '-',                                                  span: 1 },
-                        { icon: Award,    color: 'bg-yellow-100 text-yellow-600', label: '등급',     value: MEMBERSHIP_LABEL[selected.membershipLevel] ?? selected.membershipLevel,     span: 2,
-                          nextLabel: selected.nextMembershipLevel && selected.nextMembershipLevel !== selected.membershipLevel
-                            ? `→ ${MEMBERSHIP_LABEL[selected.nextMembershipLevel] ?? selected.nextMembershipLevel} 예정`
-                            : undefined },
-                      ].map(item => {
+                      {(
+                        [
+                          { icon: User,     color: 'bg-blue-100 text-blue-600',     label: '이름',     value: selected.name,     idSuffix: `#${selected.id}`,                       span: 1 },
+                          { icon: Mail,     color: 'bg-green-100 text-green-600',   label: '이메일',   value: selected.email,                                                             span: 1 },
+                          { icon: Phone,    color: 'bg-purple-100 text-purple-600', label: '전화번호', value: selected.phone ?? '-',                                                      span: 1 },
+                          { icon: Calendar, color: 'bg-orange-100 text-orange-600', label: '생년월일', value: selected.birthDate ?? '-',                                                  span: 1 },
+                          { icon: Award,    color: 'bg-yellow-100 text-yellow-600', label: '등급',     value: MEMBERSHIP_LABEL[selected.membershipLevel] ?? selected.membershipLevel,     span: 2,
+                            nextLabel: selected.nextMembershipLevel && selected.nextMembershipLevel !== selected.membershipLevel
+                              ? `→ ${MEMBERSHIP_LABEL[selected.nextMembershipLevel] ?? selected.nextMembershipLevel} 예정`
+                              : undefined },
+                        ] as { icon: React.ElementType; color: string; label: string; value: string; span: number; idSuffix?: string; nextLabel?: string }[]
+                      ).map(item => {
                         const Icon = item.icon;
                         return (
                           <div key={item.label} className={`flex items-center gap-2.5 p-2.5 bg-gray-50 rounded-xl ${item.span === 2 ? 'col-span-2' : ''}`}>
@@ -262,6 +260,7 @@ export function Customers() {
                               <p className="text-xs text-gray-500">{item.label}</p>
                               <p className="font-medium text-gray-900 text-sm truncate">
                                 {item.value}
+                                {item.idSuffix && <span className="ml-1.5 text-xs text-gray-400 font-normal">{item.idSuffix}</span>}
                                 {item.nextLabel && <span className="ml-1.5 text-xs text-gray-400 font-normal">{item.nextLabel}</span>}
                               </p>
                             </div>

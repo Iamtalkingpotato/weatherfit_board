@@ -102,6 +102,7 @@ function serializeCampaign(campaign: CampaignPayload): CampaignPayload {
     'anonymousMinVisits',
     'emailSubject',
     'emailBody',
+    'popupMessage',
   ];
 
   fields.forEach((field) => {

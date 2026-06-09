@@ -52,7 +52,7 @@ const getColumns = (eventType: string | null): string[] => {
   return ['고객명', '페이지', '시각'];
 };
 
-/** 백엔드 "yyyy.MM.dd HH:mm" → "yy-mm-dd hh:mm:ss" */
+/** 백엔드 "yyyy.MM.dd HH:mm:ss" → "yy-mm-dd hh:mm:ss" */
 function formatTime(raw: string | null | undefined): string {
   if (!raw) return '-';
   try {

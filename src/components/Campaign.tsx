@@ -8,7 +8,7 @@ import {
 import {
   getCampaigns, createCampaign, updateCampaign, deleteCampaign,
   getCoupons, getCustomers, getAllFeedbacks, getAllPurchases,
-  issueCampaignCoupons, getRegions, getProducts,
+  issueCampaignCoupons, getProducts,
 } from '../api/logApi';
 import { useCodeContext, TreeNode, fieldToTreeNode } from '../context/CodeContext';
 import { useDialog } from '../context/DialogContext';
@@ -21,10 +21,10 @@ interface CampaignFilterCondition {
   fieldNo?: number;
   fieldId: string;
   fieldLabel: string;
-  dataType: string;
+  dataType: 'string' | 'number' | 'boolean' | 'date' | 'select';
   operator: string;
   value: string;
-  since?: 'all_time' | 'campaign_start';
+  dateRange?: 'all' | 'campaign';
 }
 
 interface CampaignAction {
@@ -57,6 +57,7 @@ interface Campaign {
   emailAction?: { subject: string; body: string };
   emailSubject?: string | null;
   emailBody?: string | null;
+  popupMessage?: string | null;
 }
 
 type CustomerStat = Record<string, any>;
@@ -211,11 +212,16 @@ const FEEDBACK_COUNT_FIELDS = new Set([
   'feedbackCount', 'hotFeedbackCount', 'coldFeedbackCount', 'perfectFeedbackCount',
 ]);
 
+const DATE_RANGE_FIELDS = new Set([
+  'purchaseCount', 'totalPurchaseAmount', 'cartCount', 'wishlistCount',
+  'feedbackCount', 'coldFeedbackCount', 'hotFeedbackCount', 'perfectFeedbackCount',
+]);
+
 function matchCondition(cs: CustomerStat, cond: CampaignFilterCondition, sinceDate?: string): boolean {
   if (!cond.value) return true;
 
-  // 캠페인 시작일 이후 필터 — 피드백 집계 필드에만 적용
-  if (cond.since === 'campaign_start' && sinceDate && FEEDBACK_COUNT_FIELDS.has(cond.fieldId)) {
+  // 캠페인 시작일 이후 필터 — 피드백 집계 필드에만 적용 (handleIssueCoupons 경로용)
+  if (cond.dateRange === 'campaign' && sinceDate && FEEDBACK_COUNT_FIELDS.has(cond.fieldId)) {
     const rawFbs: any[] = cs._feedbacks ?? [];
     const filtered = rawFbs.filter((f: any) => {
       const d: string = f.feedbackDate ?? (f.createdAt ?? '').slice(0, 10);
@@ -500,7 +506,7 @@ function NavigateToCodesButton({ onClick }: { onClick: () => void }) {
 
 function FilterBuilder({
   conditions, onChange, filterSubject, onSubjectChange, onNavigateToCodes, customerStats, onFinalQuery,
-  campaignStartDate,
+  campaignStartDate, rawPurchases, rawFeedbacks,
 }: {
   conditions: CampaignFilterCondition[];
   onChange: (c: CampaignFilterCondition[]) => void;
@@ -510,6 +516,8 @@ function FilterBuilder({
   customerStats: CustomerStat[];
   onFinalQuery?: (customerIds: number[]) => void;
   campaignStartDate?: string;
+  rawPurchases?: any[];
+  rawFeedbacks?: any[];
 }) {
   const { fields, filterSubjects: allSubjects } = useCodeContext();
 
@@ -576,7 +584,7 @@ function FilterBuilder({
         dataType:   isSelect ? 'string' : (node.dataType ?? 'string'),
         operator:   ops[0].value,
         value:      '',
-        since:      'all_time',
+        dateRange:  'all',
       },
     ]);
   };
@@ -591,8 +599,37 @@ function FilterBuilder({
 
   const runQuery = () => {
     const t0 = performance.now();
-    const matched = customerStats.filter(cs =>
-      conditions.every(cond => matchCondition(cs, cond, campaignStartDate))
+
+    const hasCampaignRange = conditions.some(c => c.dateRange === 'campaign');
+
+    const effectiveStats = hasCampaignRange && campaignStartDate && rawPurchases && rawFeedbacks
+      ? customerStats.map(cs => {
+          const startD = campaignStartDate;
+          const myPurchases = rawPurchases.filter(
+            p => String(p.customerId) === String(cs.id)
+               && p.status === 'PURCHASED'
+               && (p.purchasedAt ?? '').slice(0, 10) >= startD
+          );
+          const myFeedbacks = rawFeedbacks.filter(
+            f => String(f.customerId) === String(cs.id)
+               && (f.createdAt ?? f.feedbackDate ?? '').slice(0, 10) >= startD
+          );
+          return {
+            ...cs,
+            purchaseCount:        myPurchases.length,
+            totalPurchaseAmount:  myPurchases.reduce((s: number, p: any) => s + (p.price ?? 0), 0),
+            cartCount:            rawPurchases.filter(p => String(p.customerId) === String(cs.id) && p.status === 'CART' && (p.purchasedAt ?? '').slice(0, 10) >= startD).length,
+            wishlistCount:        rawPurchases.filter(p => String(p.customerId) === String(cs.id) && p.status === 'WISHLIST' && (p.purchasedAt ?? '').slice(0, 10) >= startD).length,
+            feedbackCount:        myFeedbacks.length,
+            coldFeedbackCount:    myFeedbacks.filter((f: any) => f.feedback === 'COLD').length,
+            hotFeedbackCount:     myFeedbacks.filter((f: any) => f.feedback === 'HOT').length,
+            perfectFeedbackCount: myFeedbacks.filter((f: any) => f.feedback === 'PERFECT').length,
+          };
+        })
+      : customerStats;
+
+    const matched = effectiveStats.filter(cs =>
+      conditions.every(cond => matchCondition(cs, cond))
     );
     setQueryResult({ total: matched.length, customers: matched });
     setElapsed(Math.round(performance.now() - t0));
@@ -682,7 +719,7 @@ function FilterBuilder({
                   const fieldNode = findFieldNode(dynamicTree, cond.fieldId);
                   const dt        = fieldNode?.dataType ?? (isSelect ? 'select' : (cond.dataType ?? 'string'));
 
-                  const isAggregate = fields.find(f => f.id === cond.fieldId)?.isAggregate;
+                  const isDateRangeField = DATE_RANGE_FIELDS.has(cond.fieldId);
 
                   const rowStyle = TYPE_ROW[dt] ?? TYPE_ROW.string;
                   return (
@@ -727,14 +764,14 @@ function FilterBuilder({
                         />
                       )}
 
-                      {isAggregate && (
+                      {isDateRangeField && (
                         <select
-                          value={cond.since ?? 'all_time'}
-                          onChange={e => updateCondition(cond.id, { since: e.target.value as 'all_time' | 'campaign_start' })}
+                          value={cond.dateRange ?? 'all'}
+                          onChange={e => updateCondition(cond.id, { dateRange: e.target.value as 'all' | 'campaign' })}
                           className="border border-gray-300 rounded px-1 py-0.5 text-xs bg-white focus:outline-none"
                         >
-                          <option value="all_time">전체 누적</option>
-                          <option value="campaign_start">캠페인 시작일 이후</option>
+                          <option value="all">전체 기간</option>
+                          <option value="campaign">캠페인 시작일 이후</option>
                         </select>
                       )}
 
@@ -823,6 +860,8 @@ function CampaignForm({
   coupons,
   customerStats,
   categoryOptions,
+  rawPurchases,
+  rawFeedbacks,
   onSave,
   onCancel,
 }: {
@@ -830,6 +869,8 @@ function CampaignForm({
   coupons: any[];
   customerStats: CustomerStat[];
   categoryOptions: string[];
+  rawPurchases: any[];
+  rawFeedbacks: any[];
   onSave: (c: Campaign) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -859,7 +900,21 @@ function CampaignForm({
           tags: initial.tags ?? '',
           filterSubject: initial.filterSubject ?? '전체',
           filterConditions: parseFilterConditions(initial.filterConditions),
-          actions: initial.actions ?? [],
+          actions: (() => {
+            const base = initial.actions ?? [];
+            const hasPopup = base.some(a => a.actionType === 'POPUP');
+            if (!hasPopup && initial.popupMessage) {
+              return [...base, { actionType: 'POPUP' as const, popupMessage: initial.popupMessage }];
+            }
+            if (hasPopup && initial.popupMessage) {
+              return base.map(a =>
+                a.actionType === 'POPUP' && !a.popupMessage
+                  ? { ...a, popupMessage: initial.popupMessage! }
+                  : a
+              );
+            }
+            return base;
+          })(),
           emailAction: initial.emailSubject != null
             ? { subject: initial.emailSubject, body: initial.emailBody ?? '' }
             : undefined,
@@ -944,8 +999,36 @@ function CampaignForm({
       return;
     }
 
-    const matched = customerStats.filter(cs =>
-      (form.filterConditions ?? []).every(cond => matchCondition(cs, cond, form.startDate))
+    const conditions = form.filterConditions ?? [];
+    const hasCampaignRange = conditions.some(c => c.dateRange === 'campaign');
+    const effectiveStats = hasCampaignRange && form.startDate
+      ? customerStats.map(cs => {
+          const startD = form.startDate;
+          const myPurchases = rawPurchases.filter(
+            p => String(p.customerId) === String(cs.id)
+               && p.status === 'PURCHASED'
+               && (p.purchasedAt ?? '').slice(0, 10) >= startD
+          );
+          const myFeedbacks = rawFeedbacks.filter(
+            f => String(f.customerId) === String(cs.id)
+               && (f.createdAt ?? f.feedbackDate ?? '').slice(0, 10) >= startD
+          );
+          return {
+            ...cs,
+            purchaseCount:        myPurchases.length,
+            totalPurchaseAmount:  myPurchases.reduce((s: number, p: any) => s + (p.price ?? 0), 0),
+            cartCount:            rawPurchases.filter(p => String(p.customerId) === String(cs.id) && p.status === 'CART' && (p.purchasedAt ?? '').slice(0, 10) >= startD).length,
+            wishlistCount:        rawPurchases.filter(p => String(p.customerId) === String(cs.id) && p.status === 'WISHLIST' && (p.purchasedAt ?? '').slice(0, 10) >= startD).length,
+            feedbackCount:        myFeedbacks.length,
+            coldFeedbackCount:    myFeedbacks.filter((f: any) => f.feedback === 'COLD').length,
+            hotFeedbackCount:     myFeedbacks.filter((f: any) => f.feedback === 'HOT').length,
+            perfectFeedbackCount: myFeedbacks.filter((f: any) => f.feedback === 'PERFECT').length,
+          };
+        })
+      : customerStats;
+
+    const matched = effectiveStats.filter(cs =>
+      conditions.every(cond => matchCondition(cs, cond))
     );
     if (matched.length === 0) {
       await dialog.alert('필터 조건에 해당하는 고객이 없습니다.', '쿠폰 발급');
@@ -992,6 +1075,8 @@ function CampaignForm({
     if (_afterEnd) effectiveStatus = '실행완료';
     else if (_inPeriod && form.status !== '실행정지중') effectiveStatus = '실행중';
 
+    const popupAction = form.actions.find(a => a.actionType === 'POPUP');
+
     const payload: Campaign = {
       ...form,
       id: initial?.id ?? 0,
@@ -1002,6 +1087,7 @@ function CampaignForm({
       status: effectiveStatus,
       emailSubject: form.emailAction?.subject ?? null,
       emailBody:    form.emailAction?.body    ?? null,
+      popupMessage: popupAction?.popupMessage ?? null,
     };
 
     try {
@@ -1155,6 +1241,8 @@ function CampaignForm({
           customerStats={customerStats}
           onFinalQuery={handleFinalQuery}
           campaignStartDate={form.startDate}
+          rawPurchases={rawPurchases}
+          rawFeedbacks={rawFeedbacks}
         />
       </div>
 
@@ -1437,8 +1525,17 @@ function CampaignList({
                       : <Square size={14} className="text-gray-400" />}
                   </button>
                 </th>
-                {['캠페인 ID', '분류', '캠페인 명', '상태', '시작 일자', '종료 일자', '캠페인 액션', '기안 일자'].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
+                {([
+                  ['캠페인 ID',   'text-center'],
+                  ['분류',        'text-left'],
+                  ['캠페인 명',   'text-left'],
+                  ['상태',        'text-center'],
+                  ['시작 일자',   'text-right'],
+                  ['종료 일자',   'text-right'],
+                  ['캠페인 액션', 'text-left'],
+                  ['기안 일자',   'text-right'],
+                ] as [string, string][]).map(([h, align]) => (
+                  <th key={h} className={`px-3 py-2.5 ${align} text-xs font-medium text-gray-500 whitespace-nowrap`}>{h}</th>
                 ))}
                 <th className="px-3 py-2.5 w-16" />
               </tr>
@@ -1458,7 +1555,7 @@ function CampaignList({
                       <td className="px-3 py-3 text-center" onClick={e => { e.stopPropagation(); toggleOne(c.id); }}>
                         {checked.has(c.id) ? <CheckSquare size={14} className="text-blue-500 mx-auto" /> : <Square size={14} className="text-gray-400 mx-auto" />}
                       </td>
-                      <td className="px-3 py-3 text-xs font-mono text-gray-700 whitespace-nowrap">{c.id}</td>
+                      <td className="px-3 py-3 text-center text-xs font-mono text-gray-700 whitespace-nowrap">{c.id}</td>
                       <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{category}</td>
                       <td className="px-3 py-3 text-sm text-gray-900 max-w-[200px] truncate">{c.campaignName}</td>
                       <td className="px-3 py-3 whitespace-nowrap">
@@ -1466,8 +1563,8 @@ function CampaignList({
                           {computedStatus}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.startDate)}</td>
-                      <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.endDate)}</td>
+                      <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.startDate)}</td>
+                      <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.endDate)}</td>
                       <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap max-w-[180px]">
                         {(() => {
                           const couponActions = actions.filter(a => a.actionType === 'COUPON');
@@ -1494,7 +1591,7 @@ function CampaignList({
                             : <span className="text-gray-400">-</span>;
                         })()}
                       </td>
-                      <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.createdAt)}</td>
+                      <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.createdAt)}</td>
                       <td className="px-3 py-3 text-center" onClick={e => { e.stopPropagation(); onDelete(c.id); }}>
                         <button className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                       </td>
@@ -1537,7 +1634,6 @@ export function CampaignPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
-  const [regions, setRegions]     = useState<any[]>([]);
   const [products, setProducts]   = useState<any[]>([]);
 
   useEffect(() => {
@@ -1546,7 +1642,6 @@ export function CampaignPage() {
     getCustomers().then(data => setCustomers(Array.isArray(data) ? data : [])).catch(() => setCustomers([]));
     getAllFeedbacks().then(data => setFeedbacks(Array.isArray(data) ? data : [])).catch(() => setFeedbacks([]));
     getAllPurchases().then(data => setPurchases(Array.isArray(data) ? data : [])).catch(() => setPurchases([]));
-    getRegions().then(data => setRegions(Array.isArray(data) ? data : [])).catch(() => setRegions([]));
     getProducts().then(data => setProducts(Array.isArray(data) ? data : [])).catch(() => setProducts([]));
   }, []);
 
@@ -1557,7 +1652,6 @@ export function CampaignPage() {
   );
 
   const CUSTOMER_STATS = useMemo<CustomerStat[]>(() => {
-    const regionsMap  = Object.fromEntries(regions.map(r => [String(r.id), r]));
     const productsMap = Object.fromEntries(products.map(p => [String(p.id), p]));
 
     return customers.map(c => {
@@ -1571,9 +1665,6 @@ export function CampaignPage() {
       const lastPurchaseDate =
         [...purchased].sort((a, b) => (b.purchasedAt ?? '').localeCompare(a.purchasedAt ?? ''))[0]
           ?.purchasedAt ?? null;
-
-      const region   = regionsMap[String(c.regionId)];
-      const regionCity = region?.city ?? c.regionCity ?? null;
 
       const age = c.age != null
         ? c.age
@@ -1595,7 +1686,6 @@ export function CampaignPage() {
 
       return {
         ...c,
-        regionCity,
         age,
         purchasedCategories,
         dormantDays,
@@ -1612,7 +1702,7 @@ export function CampaignPage() {
         lastPurchaseDate,
       };
     });
-  }, [customers, feedbacks, purchases, regions, products]);
+  }, [customers, feedbacks, purchases, products]);
 
   const [view, setView] = useState<'list' | 'form'>(() => {
     return sessionStorage.getItem(DRAFT_KEY) ? 'form' : 'list';
@@ -1710,6 +1800,8 @@ export function CampaignPage() {
           coupons={coupons}
           customerStats={CUSTOMER_STATS}
           categoryOptions={categoryOptions}
+          rawPurchases={purchases}
+          rawFeedbacks={feedbacks}
           onSave={handleSave}
           onCancel={handleCancel}
         />

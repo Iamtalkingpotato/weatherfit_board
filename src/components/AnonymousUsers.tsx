@@ -15,11 +15,11 @@ import { useDialog } from '../context/DialogContext';
 interface AnonymousUser {
   id: number;
   anonymousId: string;
-  ip: string;
+  ip: string | null;
   visitCount: number;
   firstVisit: string;
   lastVisit: string;
-  popupShown: boolean;
+  popupShown: number;
   popupClicked: boolean;
   converted: boolean;
   createdAt: string;
@@ -206,6 +206,9 @@ export function AnonymousUsersPage() {
     [users],
   );
 
+  const hasIp = useMemo(() => users.some(u => u.ip != null && u.ip !== ''), [users]);
+
+
   return (
     <div className="space-y-6">
       {/* 헤더 */}
@@ -233,7 +236,7 @@ export function AnonymousUsersPage() {
       <div className="grid grid-cols-4 gap-4">
         {[
           { label: '전체 방문자', value: users.length, color: 'blue' },
-          { label: '팝업 노출', value: users.filter(u => u.popupShown).length, color: 'purple' },
+          { label: '팝업 노출', value: users.filter(u => u.popupShown > 0).length, color: 'purple' },
           { label: '팝업 클릭', value: users.filter(u => u.popupClicked).length, color: 'orange' },
           { label: '회원 전환', value: users.filter(u => u.converted).length, color: 'green' },
         ].map(card => (
@@ -259,11 +262,11 @@ export function AnonymousUsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">UUID (앞 8자리)</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">IP</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">방문수 ↓</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">최초 방문일</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">최근 방문일</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">UUID (앞 8자리)</th>
+                  {hasIp && <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">IP</th>}
+                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">방문수 ↓</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">최초 방문일</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">최근 방문일</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">팝업 노출</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">팝업 클릭</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">회원 전환</th>
@@ -273,16 +276,20 @@ export function AnonymousUsersPage() {
               <tbody className="divide-y divide-gray-100">
                 {sorted.map(user => (
                   <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                    <td className="px-4 py-3 text-center font-mono text-xs text-gray-700">
                       {user.anonymousId?.slice(0, 8) ?? '-'}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{user.ip}</td>
-                    <td className="px-4 py-3 text-center">
+                    {hasIp && <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{user.ip ?? '-'}</td>}
+                    <td className="px-4 py-3 text-right">
                       <span className="font-semibold text-blue-600">{user.visitCount.toLocaleString()}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{formatDateTime(user.firstVisit)}</td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{formatDateTime(user.lastVisit)}</td>
-                    <td className="px-4 py-3 text-center"><BoolBadge value={user.popupShown} /></td>
+                    <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap text-xs">{formatDateTime(user.firstVisit)}</td>
+                    <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap text-xs">{formatDateTime(user.lastVisit)}</td>
+                    <td className="px-4 py-3 text-center">
+                      {user.popupShown > 0
+                        ? <span className="font-semibold text-green-600">{user.popupShown}</span>
+                        : <span className="text-gray-400">-</span>}
+                    </td>
                     <td className="px-4 py-3 text-center"><BoolBadge value={user.popupClicked} /></td>
                     <td className="px-4 py-3 text-center">
                       <BoolBadge value={user.converted} trueLabel="전환" falseLabel="미전환" />
