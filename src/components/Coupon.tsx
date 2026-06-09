@@ -351,7 +351,9 @@ function CouponForm({
 export function CouponPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isAddNew = searchParams.get('addNew') === 'true';
+  const isAddNew   = searchParams.get('addNew') === 'true';
+  // ?issued=X → 해당 쿠폰 발급현황 뷰 (URL 기반 → 브라우저 back/forward 정상 동작)
+  const issuedIdParam = searchParams.get('issued') ? Number(searchParams.get('issued')) : null;
 
   const [list, setList] = useState<Coupon[]>([]);
   const [ccList, setCcList] = useState<CustomerCoupon[]>([]);
@@ -373,15 +375,23 @@ export function CouponPage() {
     });
   }, []);
 
-  // ?addNew=true 이면 바로 새 쿠폰 등록 폼 오픈
-  const [view, setView] = useState<'list' | 'form' | 'issued'>(() => isAddNew ? 'form' : 'list');
+  // formView 는 React state 로, issued 뷰는 URL param 으로 관리
+  const [formView, setFormView] = useState<'list' | 'form'>(() => isAddNew ? 'form' : 'list');
   const [editing, setEditing] = useState<Coupon | null>(null);
-  const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
   const [issuedSearch, setIssuedSearch] = useState('');
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [couponPage, setCouponPage] = useState(1);
   const PAGE_SIZE = 10;
   const ISSUED_LIMIT = 50;
+
+  // URL param 에서 선택된 쿠폰 도출
+  const selectedCoupon = useMemo(
+    () => (issuedIdParam ? list.find(c => c.id === issuedIdParam) ?? null : null),
+    [issuedIdParam, list],
+  );
+
+  // 실제 뷰 결정: form > issued(URL) > list
+  const view = formView === 'form' ? 'form' : (issuedIdParam && selectedCoupon) ? 'issued' : 'list';
 
   // ccList 기준으로 쿠폰별 실제 발급/사용 건수 집계
   const couponStats = useMemo(() => {
@@ -400,15 +410,14 @@ export function CouponPage() {
   const totalUsed = ccList.filter(cc => cc.status === 'USED').length;
   const avgUsageRate = totalIssued > 0 ? Math.round((totalUsed / totalIssued) * 100) : 0;
 
-  const handleNew = () => { setEditing(null); setView('form'); };
-  const handleEdit = (c: Coupon) => { setEditing(c); setView('form'); };
-  const handleShowIssued = (c: Coupon) => { setSelectedCoupon(c); setIssuedSearch(''); setView('issued'); };
+  const handleNew = () => { setEditing(null); setFormView('form'); };
+  const handleEdit = (c: Coupon) => { setEditing(c); setFormView('form'); };
+  // 발급현황: URL param 변경으로 히스토리 항목 생성 → 브라우저 back 이 쿠폰 목록으로 돌아옴
+  const handleShowIssued = (c: Coupon) => { setIssuedSearch(''); navigate('/coupon?issued=' + c.id); };
   const handleCancel = () => {
+    setFormView('list');
     if (isAddNew) {
-      // 캠페인에서 넘어온 경우 → 캠페인 폼으로 돌아가기
       navigate('/campaign?view=form');
-    } else {
-      setView('list');
     }
   };
 
@@ -430,7 +439,7 @@ export function CouponPage() {
 
     const data = await getCoupons();
     setList(Array.isArray(data) ? data : []);
-    setView('list');
+    setFormView('list');
   };
 
   const handleDelete = async (id: number) => {
@@ -440,7 +449,7 @@ export function CouponPage() {
     if (!ok) return;
     await deleteCoupon(id);
     setList(prev => prev.filter(c => c.id !== id));
-    if (view === 'form') setView('list');
+    if (formView === 'form') setFormView('list');
   };
 
   if (view === 'form') {
@@ -493,7 +502,7 @@ export function CouponPage() {
             </p>
           </div>
           <button
-            onClick={() => navigate('/coupon')}
+            onClick={() => navigate('/coupon', { replace: true })}
             className="ml-auto flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
           >
             ← 목록으로
