@@ -12,6 +12,7 @@ import {
   getBehaviorTypeCounts,
   getBehaviorWishlistConversion,
   getProducts,
+  type BehaviorRange,
 } from '../api/logApi';
 
 // ─── 라벨 ────────────────────────────────────────────────────────────────────
@@ -123,6 +124,15 @@ export function UserBehavior() {
   const [customStart, setCustomStart] = useState(toLocalDateStr(new Date(Date.now() - 29 * 86400000)));
   const [customEnd,   setCustomEnd]   = useState(todayStr);
 
+  const effectiveRange = useMemo((): BehaviorRange => {
+    if (rangeType === 'today') return { startDate: todayStr, endDate: todayStr };
+    if (rangeType === '7d')    return { days: 7 };
+    const start = customStart || todayStr;
+    const end   = customEnd   || todayStr;
+    return { startDate: start, endDate: end };
+  }, [rangeType, todayStr, customStart, customEnd]);
+
+  // effectiveDays は openDetail の filterDays 引数用に残す
   const effectiveDays = useMemo(() => {
     if (rangeType === 'today') return 1;
     if (rangeType === '7d')    return 7;
@@ -130,17 +140,17 @@ export function UserBehavior() {
     return 1;
   }, [rangeType, customStart]);
 
-  // ── API 동시 호출 (effectiveDays 변경 시 재호출) ────────────────────────────
+  // ── API 동시 호출 (effectiveRange 변경 시 재호출) ───────────────────────────
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      getBehaviorSummary(effectiveDays).catch(() => null),
-      getBehaviorTypeCounts(effectiveDays).catch(() => []),
-      getBehaviorHourly(effectiveDays).catch(() => []),
-      getBehaviorConversionRate(effectiveDays).catch(() => null),
-      getBehaviorPopularProducts(effectiveDays).catch(() => []),
-      getBehaviorPopularPages(effectiveDays).catch(() => []),
-      getBehaviorWishlistConversion(effectiveDays).catch(() => null),
+      getBehaviorSummary(effectiveRange).catch(() => null),
+      getBehaviorTypeCounts(effectiveRange).catch(() => []),
+      getBehaviorHourly(effectiveRange).catch(() => []),
+      getBehaviorConversionRate(effectiveRange).catch(() => null),
+      getBehaviorPopularProducts(effectiveRange).catch(() => []),
+      getBehaviorPopularPages(effectiveRange).catch(() => []),
+      getBehaviorWishlistConversion(effectiveRange).catch(() => null),
       getProducts().catch(() => []),
     ]).then(([sum, types, hourly, conv, popProds, popPages, wishConv, prods]) => {
       setSummary(sum ?? null);
@@ -177,7 +187,7 @@ export function UserBehavior() {
 
   // ── 시간대별 활동 순위: 전날부터 30일 고정 ──────────────────────────────────
   useEffect(() => {
-    getBehaviorHourly(30).then(data => {
+    getBehaviorHourly({ days: 30 }).then(data => {
       const raw: { hour: number; count: number }[] = Array.isArray(data) ? data : [];
       const hourMap: Record<number, number> = {};
       raw.forEach(h => { hourMap[Number(h.hour)] = (hourMap[Number(h.hour)] ?? 0) + h.count; });
@@ -197,18 +207,13 @@ export function UserBehavior() {
     subtitle: string,
     color: string,
     hour?: number,
-    filterDays?: number,   // 백엔드에 days 파라미터로 전달
+    filterDays?: number,   // 하위 호환 — range가 없을 때만 사용
   ) => {
-    const data = await getBehaviorDetail({ type: eventType, hour, days: filterDays }).catch(() => []);
+    const detailRange: BehaviorRange | undefined = filterDays !== undefined
+      ? (rangeType === 'today' ? { startDate: todayStr, endDate: todayStr } : { days: filterDays })
+      : undefined;
+    const data = await getBehaviorDetail({ type: eventType, hour, range: detailRange }).catch(() => []);
     let allRows: any[] = Array.isArray(data) ? data : [];
-    // 백엔드가 days=1을 "지난 24시간"으로 처리하므로, 오늘 버튼일 때 오늘 날짜만 필터링
-    if (filterDays === 1) {
-      const todayPrefixDots = toLocalDateStr(new Date()).replace(/-/g, '.');
-      allRows = allRows.filter(l => {
-        const raw = String(l.time ?? l.createdAt ?? l.timestamp ?? '');
-        return raw.startsWith(todayPrefixDots);
-      });
-    }
     // 최신순 정렬
     allRows.sort((a, b) => {
       const ta = String(a.time ?? a.createdAt ?? a.timestamp ?? '');

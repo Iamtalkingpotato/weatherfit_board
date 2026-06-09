@@ -202,7 +202,7 @@ export function AnonymousUsersPage() {
   }, []);
 
   const sorted = useMemo(
-    () => [...users].sort((a, b) => b.visitCount - a.visitCount),
+    () => [...users].sort((a, b) => new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime()),
     [users],
   );
 
@@ -233,11 +233,10 @@ export function AnonymousUsersPage() {
       </div>
 
       {/* 요약 카드 */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {[
           { label: '전체 방문자', value: users.length, color: 'blue' },
-          { label: '팝업 노출', value: users.filter(u => u.popupShown > 0).length, color: 'purple' },
-          { label: '팝업 클릭', value: users.filter(u => u.popupClicked).length, color: 'orange' },
+          { label: '팝업 노출', value: users.reduce((sum, u) => sum + (u.popupShown ?? 0), 0), color: 'purple' },
           { label: '회원 전환', value: users.filter(u => u.converted).length, color: 'green' },
         ].map(card => (
           <div key={card.label} className="bg-white border border-gray-200 rounded-xl p-4">
@@ -264,11 +263,10 @@ export function AnonymousUsersPage() {
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">UUID (앞 8자리)</th>
                   {hasIp && <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">IP</th>}
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">방문수 ↓</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">방문수</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">최초 방문일</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">최근 방문일</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">최근 방문일 ↓</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">팝업 노출</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">팝업 클릭</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">회원 전환</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">삭제</th>
                 </tr>
@@ -290,7 +288,6 @@ export function AnonymousUsersPage() {
                         ? <span className="font-semibold text-green-600">{user.popupShown}</span>
                         : <span className="text-gray-400">-</span>}
                     </td>
-                    <td className="px-4 py-3 text-center"><BoolBadge value={user.popupClicked} /></td>
                     <td className="px-4 py-3 text-center">
                       <BoolBadge value={user.converted} trueLabel="전환" falseLabel="미전환" />
                     </td>
@@ -312,7 +309,7 @@ export function AnonymousUsersPage() {
         )}
         {!loading && !error && sorted.length > 0 && (
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
-            총 {sorted.length.toLocaleString()}명 · 방문수 내림차순 정렬
+            총 {sorted.length.toLocaleString()}명 · 최근 방문일 내림차순 정렬
           </div>
         )}
       </div>

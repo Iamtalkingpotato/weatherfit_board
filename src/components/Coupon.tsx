@@ -28,6 +28,7 @@ interface Coupon {
   validDays: number;
   targetCategory?: string;
   campaignId?: number;
+  linkedCampaignIds?: number[];
   issuedCount: number;
   usedCount: number;
   status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED';
@@ -366,19 +367,14 @@ export function CouponPage() {
   }, []);
 
   // ?addNew=true 이면 바로 새 쿠폰 등록 폼 오픈
-  const [view, setView] = useState<'list' | 'form'>(() => isAddNew ? 'form' : 'list');
+  const [view, setView] = useState<'list' | 'form' | 'issued'>(() => isAddNew ? 'form' : 'list');
   const [editing, setEditing] = useState<Coupon | null>(null);
-  const [tab, setTab] = useState<'coupons' | 'issued'>('coupons');
+  const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
+  const [issuedSearch, setIssuedSearch] = useState('');
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [couponPage, setCouponPage] = useState(1);
-  const [issuedPage, setIssuedPage] = useState(1);
   const PAGE_SIZE = 10;
-
-  // 발급 현황 탭 — 최신 발급순 정렬
-  const sortedCcList = useMemo(
-    () => [...ccList].sort((a, b) => String(b.issuedAt ?? '').localeCompare(String(a.issuedAt ?? ''))),
-    [ccList]
-  );
+  const ISSUED_LIMIT = 50;
 
   // ccList 기준으로 쿠폰별 실제 발급/사용 건수 집계
   const couponStats = useMemo(() => {
@@ -399,6 +395,7 @@ export function CouponPage() {
 
   const handleNew = () => { setEditing(null); setView('form'); };
   const handleEdit = (c: Coupon) => { setEditing(c); setView('form'); };
+  const handleShowIssued = (c: Coupon) => { setSelectedCoupon(c); setIssuedSearch(''); setView('issued'); };
   const handleCancel = () => {
     if (isAddNew) {
       // 캠페인에서 넘어온 경우 → 캠페인 폼으로 돌아가기
@@ -456,6 +453,104 @@ export function CouponPage() {
           </button>
         </div>
         <CouponForm initial={editing} campaigns={campaigns} onSave={handleSave} onCancel={handleCancel} />
+      </div>
+    );
+  }
+
+  if (view === 'issued' && selectedCoupon) {
+    const custMap = Object.fromEntries(customers.map(c => [String(c.id), c.name ?? c.email ?? String(c.id)]));
+    const issuedForCoupon = ccList.filter(cc => cc.couponId === selectedCoupon.id);
+    const searchLower = issuedSearch.trim().toLowerCase();
+    const filteredIssued = searchLower
+      ? issuedForCoupon.filter(cc => {
+          const name = (custMap[String(cc.customerId)] ?? String(cc.customerId)).toLowerCase();
+          return name.includes(searchLower);
+        })
+      : issuedForCoupon;
+    const displayIssued = filteredIssued.slice(0, ISSUED_LIMIT);
+
+    return (
+      <div>
+        {/* Header */}
+        <div className="mb-6 flex items-center gap-3">
+          <div className="p-2 bg-orange-100 rounded-lg"><Tag size={20} className="text-orange-600" /></div>
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">발급 현황</h1>
+            <p className="text-gray-500 text-sm">
+              <span className="font-medium text-gray-700">{selectedCoupon.couponName}</span>
+              <span className="ml-1.5 text-gray-400 font-mono text-xs">#{selectedCoupon.id}</span>
+            </p>
+          </div>
+          <button
+            onClick={() => setView('list')}
+            className="ml-auto flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+          >
+            ← 목록으로
+          </button>
+        </div>
+
+        {/* 검색 */}
+        <div className="mb-4 flex items-center gap-3">
+          <input
+            type="text"
+            placeholder="고객명 검색..."
+            value={issuedSearch}
+            onChange={e => setIssuedSearch(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 w-56"
+          />
+          <span className="text-xs text-gray-400">
+            {filteredIssued.length > ISSUED_LIMIT
+              ? `상위 ${ISSUED_LIMIT}건 표시 (전체 ${filteredIssued.length}건)`
+              : `총 ${filteredIssued.length}건`}
+          </span>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {([
+                    ['No',    'text-center'],
+                    ['고객명', 'text-left'],
+                    ['발급일', 'text-right'],
+                    ['만료일', 'text-right'],
+                    ['사용일', 'text-right'],
+                    ['상태',   'text-center'],
+                  ] as [string, string][]).map(([h, align]) => (
+                    <th key={h} className={`px-3 py-2.5 ${align} text-xs font-medium text-gray-500 whitespace-nowrap`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {displayIssued.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-12 text-gray-400">발급 내역이 없습니다</td></tr>
+                ) : (
+                  displayIssued.map((cc, i) => (
+                    <tr key={cc.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-3 text-center text-gray-500 text-xs">{i + 1}</td>
+                      <td className="px-3 py-3 text-sm text-gray-900">{custMap[String(cc.customerId)] ?? cc.customerId}</td>
+                      <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.issuedAt)}</td>
+                      <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.expiredAt)}</td>
+                      <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.usedAt)}</td>
+                      <td className="px-3 py-3 whitespace-nowrap text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CUSTOMER_COUPON_BADGE[cc.status]}`}>
+                          {CUSTOMER_COUPON_STATUS_LABEL[cc.status]}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
+            {filteredIssued.length > ISSUED_LIMIT
+              ? `상위 ${ISSUED_LIMIT}건만 표시됩니다 — 검색으로 범위를 좁히세요`
+              : `총 ${filteredIssued.length}건`}
+          </div>
+        </div>
       </div>
     );
   }
@@ -555,31 +650,15 @@ export function CouponPage() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 mb-4">
-        {([['coupons', '쿠폰 목록'], ['issued', '발급 현황']] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === key ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Coupon List Tab */}
-      {tab === 'coupons' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Coupon List */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   {([
                     ['No',        'text-center'],
-                    ['쿠폰 ID',   'text-center'],
                     ['쿠폰명',    'text-left'],
-                    ['유형',      'text-left'],
                     ['할인값',    'text-right'],
                     ['최소주문',  'text-right'],
                     ['적용범위',  'text-left'],
@@ -598,19 +677,19 @@ export function CouponPage() {
                   <tr><td colSpan={12} className="text-center py-12 text-gray-400">쿠폰이 없습니다</td></tr>
                 ) : (
                   list.slice((couponPage - 1) * PAGE_SIZE, couponPage * PAGE_SIZE).map((c, i) => {
-                    const linkedCampaign = c.campaignId != null ? campaigns.find(cam => cam.id === c.campaignId) : null;
                     const stats = couponStats[c.id] ?? { issued: 0, used: 0 };
                     const usageRate = stats.issued > 0 ? Math.round((stats.used / stats.issued) * 100) : 0;
                     return (
                       <tr
                         key={c.id}
                         className="hover:bg-gray-50 cursor-pointer"
-                        onClick={() => handleEdit(c)}
+                        onClick={() => handleShowIssued(c)}
                       >
                         <td className="px-3 py-3 text-center text-gray-500 text-xs">{i + 1}</td>
-                        <td className="px-3 py-3 text-center text-xs font-mono text-gray-700 whitespace-nowrap">{c.id}</td>
-                        <td className="px-3 py-3 text-sm text-gray-900 max-w-[180px] truncate">{c.couponName}</td>
-                        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{COUPON_TYPE_LABEL[c.type]}</td>
+                        <td className="px-3 py-3 text-sm text-gray-900 max-w-[200px]">
+                          <span className="truncate">{c.couponName}</span>
+                          <span className="ml-1.5 text-xs text-gray-400 font-mono">#{c.id}</span>
+                        </td>
                         <td className="px-3 py-3 text-right text-xs text-gray-800 whitespace-nowrap font-medium">
                           {c.type === 'PERCENT' ? `${c.discountValue}%` : `${c.discountValue.toLocaleString()}원`}
                         </td>
@@ -622,7 +701,9 @@ export function CouponPage() {
                         </td>
                         <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{c.validDays}일</td>
                         <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
-                          {linkedCampaign ? linkedCampaign.campaignName : '-'}
+                          {c.linkedCampaignIds && c.linkedCampaignIds.length > 0
+                            ? c.linkedCampaignIds.map(id => `#${id}`).join(', ')
+                            : '-'}
                         </td>
                         <td className="px-3 py-3 text-right text-xs text-gray-700 whitespace-nowrap">
                           {stats.issued}건 / {stats.used}건
@@ -678,76 +759,6 @@ export function CouponPage() {
             )}
           </div>
         </div>
-      )}
-
-      {/* Issued Tab */}
-      {tab === 'issued' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {([
-                    ['No',    'text-center'],
-                    ['고객명', 'text-left'],
-                    ['쿠폰명', 'text-left'],
-                    ['발급일', 'text-right'],
-                    ['만료일', 'text-right'],
-                    ['사용일', 'text-right'],
-                    ['상태',  'text-center'],
-                  ] as [string, string][]).map(([h, align]) => (
-                    <th key={h} className={`px-3 py-2.5 ${align} text-xs font-medium text-gray-500 whitespace-nowrap`}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {sortedCcList.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-gray-400">발급 내역이 없습니다</td></tr>
-                ) : (
-                  sortedCcList.slice((issuedPage - 1) * PAGE_SIZE, issuedPage * PAGE_SIZE).map((cc, i) => {
-                    const customer = customers.find(c => String(c.id) === String(cc.customerId));
-                    const coupon = list.find(c => c.id === cc.couponId);
-                    return (
-                      <tr key={cc.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-3 text-center text-gray-500 text-xs">{(issuedPage - 1) * PAGE_SIZE + i + 1}</td>
-                        <td className="px-3 py-3 text-sm text-gray-900">{customer?.name ?? cc.customerId}</td>
-                        <td className="px-3 py-3 text-xs text-gray-700 max-w-[180px] truncate">{coupon?.couponName ?? cc.couponId}</td>
-                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.issuedAt)}</td>
-                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.expiredAt)}</td>
-                        <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">{fmtDate(cc.usedAt)}</td>
-                        <td className="px-3 py-3 whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CUSTOMER_COUPON_BADGE[cc.status]}`}>
-                            {CUSTOMER_COUPON_STATUS_LABEL[cc.status]}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
-            <span>총 {ccList.length}건</span>
-            {Math.ceil(ccList.length / PAGE_SIZE) > 1 && (
-              <div className="flex items-center gap-1">
-                <button onClick={() => setIssuedPage(p => Math.max(1, p - 1))} disabled={issuedPage === 1}
-                  className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40">◀</button>
-                {Array.from({ length: Math.ceil(ccList.length / PAGE_SIZE) }, (_, i) => i + 1)
-                  .filter(p => Math.abs(p - issuedPage) <= 2)
-                  .map(p => (
-                    <button key={p} onClick={() => setIssuedPage(p)}
-                      className={`px-2.5 py-1 border rounded ${issuedPage === p ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 hover:bg-gray-100'}`}>
-                      {p}
-                    </button>
-                  ))}
-                <button onClick={() => setIssuedPage(p => Math.min(Math.ceil(ccList.length / PAGE_SIZE), p + 1))} disabled={issuedPage === Math.ceil(ccList.length / PAGE_SIZE)}
-                  className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40">▶</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       <ChartDetailPanel data={detail} onClose={() => setDetail(null)} />
     </div>
   );

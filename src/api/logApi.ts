@@ -216,43 +216,61 @@ export async function getBehaviorLogs() {
   return requestJson('/api/admin/behavior-logs');
 }
 
-function daysQuery(days: number) {
-  return `?days=${encodeURIComponent(String(days))}`;
+export type BehaviorRange =
+  | { days: number; startDate?: undefined; endDate?: undefined }
+  | { startDate: string; endDate: string; days?: undefined };
+
+function buildBehaviorQuery(range: BehaviorRange): string {
+  const qs = new URLSearchParams();
+  if (range.startDate && range.endDate) {
+    qs.set('startDate', range.startDate);
+    qs.set('endDate', range.endDate);
+  } else {
+    qs.set('days', String(range.days));
+  }
+  return `?${qs.toString()}`;
 }
 
-export async function getBehaviorSummary(days: number) {
-  return requestJson(`/api/admin/behavior-logs/summary${daysQuery(days)}`);
+export async function getBehaviorSummary(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/summary${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorTypeCounts(days: number) {
-  return requestJson(`/api/admin/behavior-logs/type-counts${daysQuery(days)}`);
+export async function getBehaviorTypeCounts(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/type-counts${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorHourly(days: number) {
-  return requestJson(`/api/admin/behavior-logs/hourly${daysQuery(days)}`);
+export async function getBehaviorHourly(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/hourly${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorConversionRate(days: number) {
-  return requestJson(`/api/admin/behavior-logs/conversion-rate${daysQuery(days)}`);
+export async function getBehaviorConversionRate(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/conversion-rate${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorPopularProducts(days: number) {
-  return requestJson(`/api/admin/behavior-logs/popular-products${daysQuery(days)}`);
+export async function getBehaviorPopularProducts(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/popular-products${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorPopularPages(days: number) {
-  return requestJson(`/api/admin/behavior-logs/popular-pages${daysQuery(days)}`);
+export async function getBehaviorPopularPages(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/popular-pages${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorWishlistConversion(days: number) {
-  return requestJson(`/api/admin/behavior-logs/wishlist-conversion${daysQuery(days)}`);
+export async function getBehaviorWishlistConversion(range: BehaviorRange) {
+  return requestJson(`/api/admin/behavior-logs/wishlist-conversion${buildBehaviorQuery(range)}`);
 }
 
-export async function getBehaviorDetail(params: { type?: string | null; hour?: number; days?: number }) {
+export async function getBehaviorDetail(params: { type?: string | null; hour?: number; range?: BehaviorRange }) {
   const qs = new URLSearchParams();
   if (params.type) qs.set('type', params.type);
   if (params.hour !== undefined) qs.set('hour', String(params.hour));
-  if (params.days && params.days > 0) qs.set('days', String(params.days));
+  if (params.range) {
+    if (params.range.startDate && params.range.endDate) {
+      qs.set('startDate', params.range.startDate);
+      qs.set('endDate', params.range.endDate);
+    } else if (params.range.days && params.range.days > 0) {
+      qs.set('days', String(params.range.days));
+    }
+  }
   const query = qs.toString();
   return requestJson(`/api/admin/behavior-logs/detail${query ? `?${query}` : ''}`);
 }
